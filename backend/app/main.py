@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from backend.app.api.v1.health import router as health_router
 from backend.app.api.v1.issues import router as issues_router
 from backend.app.api.v1.projects import router as projects_router
+from backend.app.api.v1.switch import router as switch_router
 from backend.app.core.config import settings
 from backend.app.core.logging import setup_logging
 
@@ -54,3 +55,4 @@ app.include_router(health_router, tags=["Health"])
 app.include_router(health_router, prefix="/api/v1", tags=["Health"])
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(issues_router, prefix="/api/v1")
+app.include_router(switch_router, prefix="/api/v1")

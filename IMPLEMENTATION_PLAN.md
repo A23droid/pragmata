@@ -290,15 +290,15 @@ understandable collaboration trail.
 
 ### Exit criteria
 
--   [ ] A custom agent connects using the current protocol.
--   [ ] An issue-specific room is created or associated.
--   [ ] Agent messages appear in the actual Switch room.
--   [ ] Agent-to-agent or targeted handoff is demonstrated.
--   [ ] A human can join and interact.
--   [ ] Connection failures are handled without corrupting workflow
+-   [x] A custom agent connects using the current protocol.
+-   [x] An issue-specific room is created or associated.
+-   [x] Agent messages appear in the actual Switch room.
+-   [x] Agent-to-agent or targeted handoff is demonstrated.
+-   [x] A human can join and interact.
+-   [x] Connection failures are handled without corrupting workflow
     state.
--   [ ] Switch references are persisted.
--   [ ] No deprecated or invented protocol methods are used.
+-   [x] Switch references are persisted.
+-   [x] No deprecated or invented protocol methods are used.
 
 ------------------------------------------------------------------------
 
@@ -349,14 +349,14 @@ agents.
 
 ### Exit criteria
 
--   [ ] A configured provider can make a real model request.
--   [ ] Provider errors and quota exhaustion are handled.
--   [ ] Structured output is schema-validated.
--   [ ] Agent roles have distinct prompts and permissions.
--   [ ] Timeouts and retry limits work.
--   [ ] Model/provider configuration is environment-driven.
--   [ ] No secret is logged or committed.
--   [ ] At least one live agent can send a result to Switch through the
+-   [x] A configured provider can make a real model request.
+-   [x] Provider errors and quota exhaustion are handled.
+-   [x] Structured output is schema-validated.
+-   [x] Agent roles have distinct prompts and permissions.
+-   [x] Timeouts and retry limits work.
+-   [x] Model/provider configuration is environment-driven.
+-   [x] No secret is logged or committed.
+-   [x] At least one live agent can send a result to Switch through the
     adapter.
 
 ------------------------------------------------------------------------

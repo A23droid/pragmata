@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import Any, List, Optional, Union
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,8 +24,16 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
-    # Database
-    POSTGRES_SERVER: str = "localhost"
+    # Switch Collaboration
+    SWITCH_BASE_URL: str = "http://localhost:8080"
+    SWITCH_REGISTRATION_TOKEN: str = "pragmata_dev_token"
+    SWITCH_ENABLED: bool = True
+
+    # LLM Providers
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GEMINI_API_KEY: Optional[str] = None
+
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
@@ -33,6 +41,15 @@ class Settings(BaseSettings):
     DATABASE_URL: str = (
         "postgresql+asyncpg://postgres:postgres@localhost:5432/pragmata"
     )
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, v: Any) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on", "debug", "dev")
+        return False
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
