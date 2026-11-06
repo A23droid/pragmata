@@ -1,0 +1,13 @@
+{
+  "name": "sample-node-cart",
+  "version": "1.0.0",
+  "description": "PRAGMATA Demo Target: Shopping Cart with intentional discount calculation bug",
+  "main": "dist/cart.js",
+  "scripts": {
+    "test": "node --test tests/cart.test.js"
+  },
+  "keywords": ["demo", "pragmata"],
+  "author": "PRAGMATA Demo",
+  "license": "MIT"
+}
+
