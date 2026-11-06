@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     GEMINI_API_KEY: Optional[str] = None
 
+    # GitHub & Repository Workspace (Phase 5)
+    GITHUB_TOKEN: Optional[str] = None
+    WORKSPACE_BASE_DIR: str = "/tmp/pragmata_workspaces"
+
+    # Docker Sandbox (Phase 5)
+    SANDBOX_DEFAULT_IMAGE: str = "alpine:latest"
+    SANDBOX_DEFAULT_TIMEOUT: int = 30
+    SANDBOX_MAX_CPU: str = "1.0"
+    SANDBOX_MAX_MEMORY: str = "512m"
+
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"

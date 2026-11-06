@@ -396,14 +396,14 @@ controlled reproduction attempts without exposing the host machine.
 
 ### Exit criteria
 
--   [ ] A configured GitHub repository can be fetched.
--   [ ] The base commit SHA is recorded.
--   [ ] Repository structure and relevant files can be inspected.
--   [ ] A controlled command can run inside Docker.
--   [ ] Timeouts and resource limits are enforced.
--   [ ] Workspace cleanup occurs after success and failure.
--   [ ] Host credentials are not exposed to the sandbox.
--   [ ] Untrusted text cannot alter agent permissions or workflow state.
+-   [x] A configured GitHub repository can be fetched.
+-   [x] The base commit SHA is recorded.
+-   [x] Repository structure and relevant files can be inspected.
+-   [x] A controlled command can run inside Docker.
+-   [x] Timeouts and resource limits are enforced.
+-   [x] Workspace cleanup occurs after success and failure.
+-   [x] Host credentials are not exposed to the sandbox.
+-   [x] Untrusted text cannot alter agent permissions or workflow state.
 
 ------------------------------------------------------------------------
 

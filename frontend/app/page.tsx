@@ -9,10 +9,16 @@ import {
   createIssue,
   triageIssue,
   transitionIssue,
+  inspectRepository,
+  runSandbox,
+  fetchEvidence,
   HealthStatus,
   SwitchStatus,
   Issue,
   IssueDetail,
+  RepoInspectionResult,
+  SandboxExecutionResult,
+  EvidenceItem,
 } from "@/lib/api";
 import {
   AlertCircle,
@@ -20,18 +26,24 @@ import {
   Bug,
   CheckCircle2,
   Clock,
+  Code2,
   Database,
   FileText,
   Filter,
+  FolderGit2,
+  GitBranch,
   History,
   Layers,
   MessagesSquare,
+  Play,
   PlusCircle,
   Radio,
   RefreshCw,
+  Search,
   Server,
   ShieldAlert,
   ShieldCheck,
+  Terminal,
   User,
   X,
 } from "lucide-react";
@@ -60,6 +72,15 @@ export default function DashboardPage() {
   const [triageActor, setTriageActor] = useState("developer@pragmata.internal");
   const [triageNotes, setTriageNotes] = useState("");
 
+  // Phase 5 Investigation & Sandbox State
+  const [inspection, setInspection] = useState<RepoInspectionResult | null>(null);
+  const [sandboxResult, setSandboxResult] = useState<SandboxExecutionResult | null>(null);
+  const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
+  const [sandboxCommand, setSandboxCommand] = useState("pytest || python3 -m unittest");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isInspecting, setIsInspecting] = useState(false);
+  const [isRunningSandbox, setIsRunningSandbox] = useState(false);
+
   const refreshAll = async () => {
     setLoading(true);
     setError(null);
@@ -85,13 +106,50 @@ export default function DashboardPage() {
   const loadDetail = async (id: string) => {
     setDetailLoading(true);
     try {
-      const detail = await fetchIssueDetail(id);
+      const [detail, ev] = await Promise.all([
+        fetchIssueDetail(id),
+        fetchEvidence(id).catch(() => []),
+      ]);
       setSelectedIssueDetail(detail);
       setSelectedIssueId(id);
+      setEvidenceList(ev);
     } catch (err: any) {
       setError(err.message || "Failed to load issue detail");
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleInspect = async () => {
+    if (!selectedIssueId) return;
+    setIsInspecting(true);
+    setError(null);
+    try {
+      const res = await inspectRepository(selectedIssueId, searchQuery || undefined);
+      setInspection(res);
+      if (res.test_commands && res.test_commands.length > 0) {
+        setSandboxCommand(res.test_commands[0]);
+      }
+    } catch (err: any) {
+      setError(err.message || "Repository inspection failed");
+    } finally {
+      setIsInspecting(false);
+    }
+  };
+
+  const handleRunSandbox = async () => {
+    if (!selectedIssueId || !sandboxCommand.trim()) return;
+    setIsRunningSandbox(true);
+    setError(null);
+    try {
+      const res = await runSandbox(selectedIssueId, sandboxCommand.trim());
+      setSandboxResult(res);
+      const updatedEv = await fetchEvidence(selectedIssueId);
+      setEvidenceList(updatedEv);
+    } catch (err: any) {
+      setError(err.message || "Sandbox execution failed");
+    } finally {
+      setIsRunningSandbox(false);
     }
   };
 
@@ -207,7 +265,7 @@ export default function DashboardPage() {
             <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
               PRAGMATA
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
-                Phase 3 &bull; Switch Native
+                Phase 5 &bull; Safe Docker Sandbox
               </span>
             </h1>
             <p className="text-[11px] text-slate-400">
@@ -488,6 +546,222 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </div>
+
+                {/* PHASE 5: Repository Connection & Base Commit Inspection */}
+                <div className="rounded-xl border border-sky-900/50 bg-sky-950/15 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-sky-300">
+                      <FolderGit2 className="w-4 h-4 text-sky-400" />
+                      Repository Connection & Workspace Inspection (Phase 5)
+                    </div>
+                    <span className="text-[10px] text-sky-400 font-mono">
+                      Safe Workspace Isolation
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Connects to the repository, clones into an isolated temporary workspace, records the exact base commit SHA, and inspects files, frameworks, and test runners.
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <div className="flex-1 flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Search code / symbols (e.g. discount, calculate, checkout)"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="flex-1 px-2.5 py-1.5 rounded bg-slate-950 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                      />
+                      <button
+                        onClick={handleInspect}
+                        disabled={isInspecting}
+                        className="px-3.5 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isInspecting ? "animate-spin" : ""}`} />
+                        <span>{isInspecting ? "Inspecting..." : "Inspect Repository"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {inspection && (
+                    <div className="space-y-3 pt-2 text-xs border-t border-slate-800">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800 space-y-1">
+                          <div className="text-[10px] uppercase font-mono text-slate-500 flex items-center gap-1">
+                            <GitBranch className="w-3 h-3 text-sky-400" /> Base Commit SHA
+                          </div>
+                          <div className="font-mono text-xs text-sky-300 break-all">
+                            {inspection.commit_sha}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Branch: <span className="font-mono text-slate-300">{inspection.branch}</span> &bull; {inspection.total_files} files
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800 space-y-1">
+                          <div className="text-[10px] uppercase font-mono text-slate-500 flex items-center gap-1">
+                            <Code2 className="w-3 h-3 text-sky-400" /> Tech & Test Runners
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {inspection.detected_languages.map((l) => (
+                              <span key={l} className="text-[10px] px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60 font-mono">
+                                {l}
+                              </span>
+                            ))}
+                            {inspection.detected_frameworks.map((f) => (
+                              <span key={f} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono">
+                                {f}
+                              </span>
+                            ))}
+                          </div>
+                          {inspection.test_commands.length > 0 && (
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1 pt-1">
+                              <span>Test Commands:</span>
+                              {inspection.test_commands.map((cmd) => (
+                                <button
+                                  key={cmd}
+                                  onClick={() => setSandboxCommand(cmd)}
+                                  className="font-mono text-emerald-400 hover:underline"
+                                  title="Click to copy to sandbox command"
+                                >
+                                  {cmd}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {inspection.search_results.length > 0 && (
+                        <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800 space-y-1.5">
+                          <div className="text-[10px] uppercase font-mono text-slate-500 flex items-center gap-1">
+                            <Search className="w-3 h-3 text-sky-400" /> Search Matches ({inspection.search_results.length})
+                          </div>
+                          <div className="space-y-1 max-h-36 overflow-y-auto font-mono text-[11px]">
+                            {inspection.search_results.map((sm, idx) => (
+                              <div key={idx} className="p-1 rounded bg-slate-900 border border-slate-800 flex justify-between gap-2">
+                                <span className="text-sky-300 truncate">{sm.file_path}:{sm.line_number}</span>
+                                <span className="text-slate-400 truncate">{sm.line_content}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* PHASE 5: Controlled Docker Sandbox Execution */}
+                <div className="rounded-xl border border-purple-900/50 bg-purple-950/15 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-purple-300">
+                      <Terminal className="w-4 h-4 text-purple-400" />
+                      Isolated Docker Sandbox Execution (Phase 5)
+                    </div>
+                    <span className="text-[10px] text-purple-400 font-mono">
+                      Restricted Mounts & Offline
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Executes controlled reproduction attempts inside a hardened container: resource-capped, non-root, zero host secrets, and disconnected from network.
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1 flex gap-2">
+                      <input
+                        type="text"
+                        value={sandboxCommand}
+                        onChange={(e) => setSandboxCommand(e.target.value)}
+                        placeholder="Command to run (e.g. pytest, python script.py)"
+                        className="flex-1 px-2.5 py-1.5 rounded bg-slate-950 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-purple-500 font-mono"
+                      />
+                      <button
+                        onClick={handleRunSandbox}
+                        disabled={isRunningSandbox || !sandboxCommand.trim()}
+                        className="px-3.5 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                      >
+                        <Play className={`w-3.5 h-3.5 ${isRunningSandbox ? "animate-pulse" : ""}`} />
+                        <span>{isRunningSandbox ? "Executing..." : "Run in Sandbox"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                    <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
+                      Network: Offline (--network none)
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
+                      CPUs: 1.0 &bull; RAM: 512m
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
+                      User: 1000:1000
+                    </span>
+                  </div>
+
+                  {sandboxResult && (
+                    <div className="rounded-lg bg-slate-950 border border-slate-800 p-3 space-y-2 text-xs font-mono">
+                      <div className="flex items-center justify-between text-[11px] border-b border-slate-800/80 pb-1.5">
+                        <span className="text-slate-400">
+                          Exit Code: <span className={sandboxResult.exit_code === 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{sandboxResult.exit_code}</span>
+                        </span>
+                        <span className="text-slate-500">
+                          {sandboxResult.duration_seconds}s {sandboxResult.timed_out ? "(TIMED OUT)" : ""}
+                        </span>
+                      </div>
+                      {sandboxResult.stdout && (
+                        <div className="space-y-1">
+                          <div className="text-[10px] text-slate-500 uppercase">Stdout:</div>
+                          <pre className="text-[11px] text-slate-300 max-h-36 overflow-y-auto whitespace-pre-wrap bg-slate-900/60 p-2 rounded">
+                            {sandboxResult.stdout}
+                          </pre>
+                        </div>
+                      )}
+                      {sandboxResult.stderr && (
+                        <div className="space-y-1">
+                          <div className="text-[10px] text-rose-400 uppercase">Stderr:</div>
+                          <pre className="text-[11px] text-rose-300 max-h-36 overflow-y-auto whitespace-pre-wrap bg-slate-900/60 p-2 rounded">
+                            {sandboxResult.stderr}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* PHASE 5: Recorded Real Evidence */}
+                {evidenceList.length > 0 && (
+                  <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/10 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        Recorded Evidence ({evidenceList.length} items in PostgreSQL)
+                      </div>
+                      <span className="text-[10px] text-emerald-400 font-mono">
+                        Tool-Generated Provenance
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {evidenceList.map((ev) => (
+                        <div key={ev.id} className="p-2.5 rounded bg-slate-950/80 border border-slate-800 space-y-1 text-xs">
+                          <div className="flex items-center justify-between text-[10px] font-mono">
+                            <span className="text-emerald-400 font-semibold">{ev.evidence_type}</span>
+                            <span className="text-slate-500">{new Date(ev.created_at).toLocaleTimeString()}</span>
+                          </div>
+                          <pre className="text-[11px] text-slate-300 max-h-24 overflow-y-auto whitespace-pre-wrap bg-slate-900/70 p-2 rounded font-mono">
+                            {ev.content}
+                          </pre>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 font-mono">
+                            <span>Tool: {ev.tool_name || "system"}</span>
+                            {ev.exit_code !== undefined && ev.exit_code !== null && (
+                              <span>Exit: {ev.exit_code}</span>
+                            )}
+                            <span className="text-slate-400">Provenance: {ev.provenance}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* HUMAN GATE: Developer Triage Section */}
                 <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-4 space-y-3">

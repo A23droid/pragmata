@@ -176,3 +176,82 @@ export async function fetchIssueRooms(id: string): Promise<any[]> {
   return res.json();
 }
 
+export interface RepoInspectionResult {
+  commit_sha: string;
+  branch: string;
+  total_files: number;
+  detected_languages: string[];
+  detected_frameworks: string[];
+  test_commands: string[];
+  file_tree: Array<{ path: string; name: string; size_bytes: number; depth: number }>;
+  readme_snippet?: string;
+  config_files: string[];
+  search_results: Array<{ file_path: string; line_number: number; line_content: string }>;
+}
+
+export interface SandboxExecutionResult {
+  command: string;
+  exit_code: number;
+  stdout: string;
+  stderr: string;
+  duration_seconds: number;
+  timed_out: boolean;
+  error_message?: string;
+}
+
+export interface EvidenceItem {
+  id: string;
+  issue_id: string;
+  investigation_id?: string;
+  evidence_type: string;
+  content: string;
+  tool_name?: string;
+  exit_code?: number;
+  file_path?: string;
+  provenance: string;
+  created_at: string;
+}
+
+export async function inspectRepository(
+  issueId: string,
+  searchQuery?: string
+): Promise<RepoInspectionResult> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/inspect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ search_query: searchQuery || undefined }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Repository inspection failed");
+  }
+  return res.json();
+}
+
+export async function runSandbox(
+  issueId: string,
+  command: string,
+  timeoutSeconds: number = 30
+): Promise<SandboxExecutionResult> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/sandbox`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ command, timeout_seconds: timeoutSeconds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Sandbox execution failed");
+  }
+  return res.json();
+}
+
+export async function fetchEvidence(issueId: string): Promise<EvidenceItem[]> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/evidence`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return res.json();
+}
+
