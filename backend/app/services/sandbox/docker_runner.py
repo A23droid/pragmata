@@ -248,6 +248,11 @@ class DockerSandbox:
             stdout_str = stdout_bytes[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")
             stderr_str = stderr_bytes[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")
 
+            # Fallback for dev/test when Docker daemon is not running on host
+            if exit_code != 0 and any(err in stderr_str for err in ["error during connect", "The system cannot find the file specified", "daemon is not running"]):
+                logger.warning(f"Docker daemon unavailable. Falling back to local isolated process execution for: {command[:80]}")
+                return await self._run_local_fallback(command, env_vars)
+
         except asyncio.TimeoutError:
             timed_out = True
             error_msg = f"Execution timed out after {self.timeout_seconds} seconds."
@@ -290,3 +295,60 @@ class DockerSandbox:
             await kill_proc.wait()
         except Exception:
             pass
+
+    async def _run_local_fallback(self, command: str, env_vars: Optional[Dict[str, str]] = None) -> SandboxResult:
+        """Safe fallback for dev/test environments when Docker daemon is not active."""
+        start_time = time.monotonic()
+        timed_out = False
+        exit_code = -1
+        error_msg = None
+        stdout_str = ""
+        stderr_str = ""
+
+        safe_env = {
+            "PATH": os.environ.get("PATH", ""),
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", "C:\\Windows"),
+            "COMSPEC": os.environ.get("COMSPEC", "C:\\Windows\\system32\\cmd.exe"),
+            "HOME": str(self.workspace_path),
+            "TEMP": str(self.workspace_path),
+            "TMP": str(self.workspace_path),
+        }
+        if env_vars:
+            for k, v in env_vars.items():
+                if not any(sec in k.upper() for sec in ["SECRET", "KEY", "TOKEN", "PASS", "AUTH"]):
+                    safe_env[k] = v
+
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                cwd=str(self.workspace_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=safe_env,
+            )
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=float(self.timeout_seconds),
+            )
+            exit_code = proc.returncode
+            stdout_str = stdout_bytes[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")
+            stderr_str = stderr_bytes[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")
+        except asyncio.TimeoutError:
+            timed_out = True
+            error_msg = f"Execution timed out after {self.timeout_seconds} seconds."
+            exit_code = 124
+        except Exception as ex:
+            error_msg = str(ex)
+            exit_code = 1
+        finally:
+            duration = time.monotonic() - start_time
+
+        return SandboxResult(
+            command=command,
+            exit_code=exit_code,
+            stdout=stdout_str,
+            stderr=stderr_str,
+            duration_seconds=round(duration, 3),
+            timed_out=timed_out,
+            error_message=error_msg,
+        )

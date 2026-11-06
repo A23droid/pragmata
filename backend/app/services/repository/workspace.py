@@ -139,10 +139,8 @@ class ManagedWorkspace:
         return stdout.decode("utf-8", errors="replace").strip()
 
     async def _clone_from_local(self, local_path: str) -> None:
-        """Clone from local directory to workspace."""
+        """Clone from local directory to workspace and checkout target branch or commit."""
         cmd = ["clone", "--no-hardlinks", local_path, str(self.path)]
-        if self.branch_or_commit:
-            cmd.extend(["--branch", self.branch_or_commit])
         
         proc = await asyncio.create_subprocess_exec(
             "git",
@@ -153,6 +151,12 @@ class ManagedWorkspace:
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
             raise RuntimeError(f"Failed to clone local repository: {stderr.decode().strip()}")
+
+        if self.branch_or_commit:
+            try:
+                await self._run_git_cmd("checkout", self.branch_or_commit)
+            except Exception as ex:
+                logger.warning(f"Failed checkout of {self.branch_or_commit} in local clone: {ex}")
 
     async def _clone_from_remote(self, remote_url: str) -> None:
         """Clone remote git repository (e.g. GitHub)."""

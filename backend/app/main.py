@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from backend.app.api.v1.health import router as health_router
+from backend.app.api.v1.implementation import router as implementation_router
 from backend.app.api.v1.investigations import router as investigations_router
 from backend.app.api.v1.issues import router as issues_router
 from backend.app.api.v1.projects import router as projects_router
@@ -75,4 +76,5 @@ app.include_router(health_router, prefix="/api/v1", tags=["Health"])
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(issues_router, prefix="/api/v1")
 app.include_router(investigations_router, prefix="/api/v1")
+app.include_router(implementation_router, prefix="/api/v1")
 app.include_router(switch_router, prefix="/api/v1")

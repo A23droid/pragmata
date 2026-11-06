@@ -14,6 +14,13 @@ import {
   fetchEvidence,
   runInvestigation,
   fetchAgentTasks,
+  triggerResolution,
+  fetchSolutions,
+  approveFixStrategy,
+  triggerImplementation,
+  triggerVerification,
+  fetchImplementation,
+  SolutionItem,
   HealthStatus,
   SwitchStatus,
   Issue,
@@ -94,6 +101,17 @@ export default function DashboardPage() {
   const [agentTasks, setAgentTasks] = useState<AgentTaskItem[]>([]);
   const [isInvestigating, setIsInvestigating] = useState(false);
 
+  // Phase 7 & 8 Resolution & Verification State
+  const [solutions, setSolutions] = useState<SolutionItem[]>([]);
+  const [isResolving, setIsResolving] = useState(false);
+  const [selectedSolutionId, setSelectedSolutionId] = useState<string | null>(null);
+  const [customStrategyText, setCustomStrategyText] = useState("");
+  const [isApprovingFix, setIsApprovingFix] = useState(false);
+  const [isImplementing, setIsImplementing] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [implementationInfo, setImplementationInfo] = useState<any>(null);
+  const [verificationResult, setVerificationResult] = useState<any>(null);
+
   const refreshAll = async () => {
     setLoading(true);
     setError(null);
@@ -119,19 +137,86 @@ export default function DashboardPage() {
   const loadDetail = async (id: string) => {
     setDetailLoading(true);
     try {
-      const [detail, ev, tasks] = await Promise.all([
+      const [detail, ev, tasks, sols, impl] = await Promise.all([
         fetchIssueDetail(id),
         fetchEvidence(id).catch(() => []),
         fetchAgentTasks(id).catch(() => []),
+        fetchSolutions(id).catch(() => []),
+        fetchImplementation(id).catch(() => null),
       ]);
       setSelectedIssueDetail(detail);
       setSelectedIssueId(id);
       setEvidenceList(ev);
       setAgentTasks(tasks);
+      setSolutions(sols);
+      setImplementationInfo(impl);
     } catch (err: any) {
       setError(err.message || "Failed to load issue detail");
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleRunResolution = async () => {
+    if (!selectedIssueId) return;
+    setIsResolving(true);
+    setError(null);
+    try {
+      await triggerResolution(selectedIssueId);
+      await refreshAll();
+      await loadDetail(selectedIssueId);
+    } catch (err: any) {
+      setError(err.message || "Resolution debate failed");
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  const handleApproveFix = async () => {
+    if (!selectedIssueId) return;
+    setIsApprovingFix(true);
+    setError(null);
+    try {
+      await approveFixStrategy(selectedIssueId, selectedSolutionId || undefined, customStrategyText || undefined);
+      setSelectedSolutionId(null);
+      setCustomStrategyText("");
+      await refreshAll();
+      await loadDetail(selectedIssueId);
+    } catch (err: any) {
+      setError(err.message || "Fix approval failed");
+    } finally {
+      setIsApprovingFix(false);
+    }
+  };
+
+  const handleRunImplementation = async () => {
+    if (!selectedIssueId) return;
+    setIsImplementing(true);
+    setError(null);
+    try {
+      await triggerImplementation(selectedIssueId);
+      await refreshAll();
+      await loadDetail(selectedIssueId);
+    } catch (err: any) {
+      setError(err.message || "Implementation failed");
+    } finally {
+      setIsImplementing(false);
+    }
+  };
+
+  const handleRunVerification = async () => {
+    if (!selectedIssueId) return;
+    setIsVerifying(true);
+    setError(null);
+    try {
+      const res = await triggerVerification(selectedIssueId);
+      setVerificationResult(res);
+      await refreshAll();
+      await loadDetail(selectedIssueId);
+    } catch (err: any) {
+      setError(err.message || "Verification failed");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -1119,6 +1204,211 @@ export default function DashboardPage() {
                       Defer
                     </button>
                   </div>
+                </div>
+
+                {/* PHASE 7: Multi-Agent Fix Strategy Debate, Ranking & Scope Guardian */}
+                <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/20 p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-indigo-300">
+                      <Layers className="w-4 h-4 text-indigo-400" />
+                      Resolution Hierarchy &amp; Fix Strategy Debate (Phase 7)
+                    </div>
+                    <span className="text-[10px] text-indigo-400 font-mono px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20">
+                      Resolution Lead &amp; Scope Guardian
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Activated only after developer acceptance. Coordinates <strong>Root Cause Analyst</strong>, <strong>Solution Architect</strong> (2–3 distinct strategies), <strong>Critic</strong>, <strong>Scope Guardian</strong>, and <strong>Rubric Evaluator</strong>.
+                  </p>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleRunResolution}
+                      disabled={isResolving || selectedIssueDetail.status === "RECEIVED" || selectedIssueDetail.status === "INVESTIGATING"}
+                      className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-40 flex items-center gap-2"
+                    >
+                      <Zap className={`w-3.5 h-3.5 ${isResolving ? "animate-spin" : ""}`} />
+                      <span>{isResolving ? "Debating Fix Strategies..." : "Trigger Multi-Agent Fix Debate"}</span>
+                    </button>
+                  </div>
+
+                  {solutions.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider font-mono">
+                        Ranked Fix Proposals ({solutions.length})
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {solutions.map((sol, index) => (
+                          <div
+                            key={sol.id}
+                            className={`p-3.5 rounded-lg border transition-all ${
+                              selectedSolutionId === sol.id
+                                ? "bg-indigo-950/60 border-indigo-500 shadow-md shadow-indigo-500/20"
+                                : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+                                    Rank #{sol.rank || index + 1}
+                                  </span>
+                                  <h4 className="text-xs font-bold text-slate-200">{sol.title}</h4>
+                                  {sol.is_recommended && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 uppercase">
+                                      Recommended
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-300 leading-relaxed">{sol.description}</p>
+                              </div>
+                              <input
+                                type="radio"
+                                name="selectedSolution"
+                                checked={selectedSolutionId === sol.id}
+                                onChange={() => setSelectedSolutionId(sol.id)}
+                                className="mt-1 accent-indigo-500 cursor-pointer"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 text-[10px] font-mono">
+                              <div className="p-2 rounded bg-slate-900/90 border border-slate-800">
+                                <span className="text-slate-400 font-semibold">Affected Files:</span>
+                                <div className="text-indigo-300 mt-0.5">{sol.affected_files?.join(", ") || "None"}</div>
+                              </div>
+                              <div className="p-2 rounded bg-slate-900/90 border border-slate-800">
+                                <span className="text-slate-400 font-semibold">Complexity Score:</span>
+                                <div className="text-amber-300 mt-0.5">{sol.complexity_score} / 5</div>
+                              </div>
+                            </div>
+
+                            {/* Scope Guardian & Critic Summary */}
+                            {sol.scope_assessment && (
+                              <div className="mt-2 p-2 rounded bg-slate-900/80 border border-slate-800 text-[10px] space-y-1">
+                                <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                                  <ShieldCheck className="w-3.5 h-3.5" />
+                                  <span>Scope Guardian Verdict: {sol.scope_assessment.verdict || "APPROVED"}</span>
+                                </div>
+                                {sol.critique?.hidden_risks && sol.critique.hidden_risks.length > 0 && (
+                                  <div className="text-slate-400">
+                                    <span className="text-amber-400">Critic Note:</span> {sol.critique.hidden_risks.join("; ")}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Developer Fix Approval Form */}
+                      <div className="p-3.5 rounded-lg bg-slate-950 border border-indigo-900/60 space-y-3">
+                        <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          Developer Fix Approval Gate (Phase 7)
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          Select one of the ranked strategies above or provide custom implementation guidance below.
+                        </p>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-mono">Custom Developer Strategy (Optional)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Only modify cart.js, keep existing helper signature."
+                            value={customStrategyText}
+                            onChange={(e) => setCustomStrategyText(e.target.value)}
+                            className="w-full mt-1 px-2.5 py-1.5 rounded bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <button
+                          onClick={handleApproveFix}
+                          disabled={isApprovingFix || (!selectedSolutionId && !customStrategyText.trim())}
+                          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow transition-all disabled:opacity-40"
+                        >
+                          {isApprovingFix ? "Recording Approval..." : "Approve Fix Strategy for Implementation"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* PHASE 8: Approved Implementation & Sandbox Verification */}
+                <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
+                      <FolderGit2 className="w-4 h-4 text-emerald-400" />
+                      Approved Implementation &amp; Sandbox Verification (Phase 8)
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                      Isolated Branch &bull; Strict Verifier
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Source code is modified strictly on an isolated Git branch (<code>fix/pragmata-issue-*</code>) after developer approval. The Verifier re-runs the original reproduction procedure and project tests inside Docker before marking the issue <strong>RESOLVED</strong>.
+                  </p>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={handleRunImplementation}
+                      disabled={isImplementing || actionLoading}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow transition-all disabled:opacity-40 flex items-center gap-2"
+                    >
+                      <Code2 className={`w-3.5 h-3.5 ${isImplementing ? "animate-spin" : ""}`} />
+                      <span>{isImplementing ? "Writing Implementation..." : "Execute Approved Implementation"}</span>
+                    </button>
+
+                    <button
+                      onClick={handleRunVerification}
+                      disabled={isVerifying || actionLoading}
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow transition-all disabled:opacity-40 flex items-center gap-2"
+                    >
+                      <ShieldCheck className={`w-3.5 h-3.5 ${isVerifying ? "animate-spin" : ""}`} />
+                      <span>{isVerifying ? "Running Sandbox Verification..." : "Run Sandbox Verification"}</span>
+                    </button>
+                  </div>
+
+                  {/* Implementation and Verification Status Card */}
+                  {implementationInfo?.has_implementation && (
+                    <div className="p-3.5 rounded-lg bg-slate-950/90 border border-slate-800 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-emerald-400 font-bold">Branch: {implementationInfo.branch_name}</span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                          Status: {implementationInfo.status}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Base Commit: <code className="text-slate-300">{implementationInfo.base_commit_sha?.slice(0, 8)}</code>
+                        {implementationInfo.commit_shas?.length > 0 && (
+                          <span> &bull; Head Commit: <code className="text-emerald-300">{implementationInfo.commit_shas[0]?.slice(0, 8)}</code></span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Modified Files: <span className="font-mono text-slate-200">{implementationInfo.changed_files?.join(", ") || "None"}</span>
+                      </div>
+
+                      {verificationResult && (
+                        <div className="mt-3 p-3 rounded bg-slate-900 border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-200">Verification Outcome:</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              verificationResult.all_passed ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                            }`}>
+                              {verificationResult.overall_status}
+                            </span>
+                          </div>
+                          <div className="text-[11px] space-y-1 font-mono">
+                            <div className="text-slate-300">
+                              Reproduction Check: {verificationResult.reproduction_check?.passed ? "PASSED (0)" : "FAILED"}
+                            </div>
+                            {verificationResult.test_suite_check && (
+                              <div className="text-slate-300">
+                                Test Suite Check: {verificationResult.test_suite_check.passed ? "PASSED (0)" : "FAILED"}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Deterministic Lifecycle Transitions (Simulation Helper) */}

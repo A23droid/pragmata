@@ -108,6 +108,12 @@ ALLOWED_TRANSITIONS: Dict[IssueStatus, Set[IssueStatus]] = {
 
 class WorkflowEngine:
     @classmethod
+    def can_transition(cls, from_status: IssueStatus, to_status: IssueStatus) -> bool:
+        """Check if a transition from from_status to to_status is allowed by the canonical state machine."""
+        allowed = ALLOWED_TRANSITIONS.get(from_status, set())
+        return to_status in allowed
+
+    @classmethod
     async def get_issue_with_lock(cls, db: AsyncSession, issue_id: str) -> Issue:
         """Fetch issue using SELECT FOR UPDATE to prevent race conditions during state transitions."""
         stmt = select(Issue).where(Issue.id == issue_id).with_for_update()

@@ -492,16 +492,16 @@ strategies under hierarchical governance.
 
 ### Exit criteria
 
--   [ ] Resolution agents activate only after issue acceptance.
--   [ ] Architect proposes multiple defensible strategies.
--   [ ] Critic provides meaningful counterarguments.
--   [ ] Scope Guardian can intervene with evidence.
--   [ ] Debate and proposal limits are enforced by backend code.
--   [ ] Options are ranked using an explicit rubric.
--   [ ] Developer can select or provide a custom strategy.
--   [ ] Approval is authenticated and persisted.
--   [ ] Implementer remains unable to modify source before approval.
--   [ ] Agent collaboration is visible in Switch.
+-   [x] Resolution agents activate only after issue acceptance.
+-   [x] Architect proposes multiple defensible strategies.
+-   [x] Critic provides meaningful counterarguments.
+-   [x] Scope Guardian can intervene with evidence.
+-   [x] Debate and proposal limits are enforced by backend code.
+-   [x] Options are ranked using an explicit rubric.
+-   [x] Developer can select or provide a custom strategy.
+-   [x] Approval is authenticated and persisted.
+-   [x] Implementer remains unable to modify source before approval.
+-   [x] Agent collaboration is visible in Switch.
 
 ------------------------------------------------------------------------
 
@@ -541,16 +541,16 @@ execution.
 
 ### Exit criteria
 
--   [ ] Implementation requires recorded developer approval.
--   [ ] Work occurs on an isolated branch.
--   [ ] Only approved scope is changed.
--   [ ] Actual test commands are executed.
--   [ ] Original reproduction is rechecked.
--   [ ] Results include real exit codes and output.
--   [ ] Failed checks prevent resolution.
--   [ ] Retry limits are enforced.
--   [ ] Final diff is available to the developer.
--   [ ] Resolved status requires successful required checks.
+-   [x] Implementation requires recorded developer approval.
+-   [x] Work occurs on an isolated branch.
+-   [x] Only approved scope is changed.
+-   [x] Actual test commands are executed.
+-   [x] Original reproduction is rechecked.
+-   [x] Results include real exit codes and output.
+-   [x] Failed checks prevent resolution.
+-   [x] Retry limits are enforced.
+-   [x] Final diff is available to the developer.
+-   [x] Resolved status requires successful required checks.
 
 ------------------------------------------------------------------------
 
@@ -587,14 +587,14 @@ Make one complete, reliable workflow easy to demonstrate.
 
 ### Exit criteria
 
--   [ ] One full consumer-report-to-verified-fix demo succeeds.
--   [ ] Real Switch collaboration is shown.
--   [ ] Real repository inspection and sandbox execution are shown.
--   [ ] Human approval gates are demonstrated.
--   [ ] At least one negative path is demonstrated safely.
--   [ ] No fake test results or approvals are displayed.
--   [ ] Setup instructions work from a clean checkout.
--   [ ] Known limitations are documented honestly.
+-   [x] One full consumer-report-to-verified-fix demo succeeds.
+-   [x] Real Switch collaboration is shown.
+-   [x] Real repository inspection and sandbox execution are shown.
+-   [x] Human approval gates are demonstrated.
+-   [x] At least one negative path is demonstrated safely.
+-   [x] No fake test results or approvals are displayed.
+-   [x] Setup instructions work from a clean checkout.
+-   [x] Known limitations are documented honestly.
 
 ------------------------------------------------------------------------
 

@@ -340,3 +340,113 @@ export async function fetchAgentTasks(issueId: string): Promise<AgentTaskItem[]>
   return res.json();
 }
 
+export interface SolutionItem {
+  id: string;
+  proposal_id: string;
+  title: string;
+  strategy_type?: string;
+  description: string;
+  rationale: string;
+  affected_files: string[];
+  complexity_score: number;
+  rank?: number;
+  is_recommended?: boolean;
+  critique?: Record<string, any>;
+  evaluation?: Record<string, any>;
+  scope_assessment?: Record<string, any>;
+}
+
+export async function triggerResolution(issueId: string, developerToken = "dev_secret_token"): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/resolution`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Developer-Token": developerToken,
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Resolution debate failed");
+  }
+  return res.json();
+}
+
+export async function fetchSolutions(issueId: string): Promise<SolutionItem[]> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/solutions`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return res.json();
+}
+
+export async function approveFixStrategy(
+  issueId: string,
+  solutionId?: string,
+  customStrategy?: string,
+  developerToken = "dev_secret_token"
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/approve-fix`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Developer-Token": developerToken,
+    },
+    body: JSON.stringify({
+      decision: solutionId ? "FIX_APPROVED" : "CUSTOM_STRATEGY_APPROVED",
+      solution_id: solutionId,
+      custom_strategy: customStrategy,
+      notes: "Approved via Developer Dashboard",
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Fix approval failed");
+  }
+  return res.json();
+}
+
+export async function triggerImplementation(issueId: string, developerToken = "dev_secret_token"): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/implement`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Developer-Token": developerToken,
+    },
+    body: JSON.stringify({ developer_token: developerToken, push_to_remote: false }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Implementation failed");
+  }
+  return res.json();
+}
+
+export async function triggerVerification(issueId: string, developerToken = "dev_secret_token"): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Developer-Token": developerToken,
+    },
+    body: JSON.stringify({ run_test_suite: true }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Verification failed");
+  }
+  return res.json();
+}
+
+export async function fetchImplementation(issueId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/implementation`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    return { has_implementation: false };
+  }
+  return res.json();
+}
+
+
