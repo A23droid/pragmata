@@ -1,0 +1,178 @@
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+export interface HealthStatus {
+  status: string;
+  version: string;
+  environment: string;
+  database: string;
+}
+
+export interface ConversationReference {
+  id: string;
+  issue_id: string;
+  room_id: string;
+  channel_type: "INVESTIGATION" | "RESOLUTION" | "IMPLEMENTATION" | "GENERAL";
+  external_thread_id?: string;
+  metadata_json: Record<string, any>;
+  created_at: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  issue_id: string;
+  event_type: string;
+  from_state?: string | null;
+  to_state?: string | null;
+  actor: string;
+  payload: Record<string, any>;
+  created_at: string;
+}
+
+export interface Approval {
+  id: string;
+  issue_id: string;
+  decision: string;
+  target_stage: string;
+  actor: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface Issue {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  expected_behavior?: string;
+  steps_attempted?: string;
+  reporter_environment?: Record<string, any>;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IssueDetail extends Issue {
+  project?: {
+    id: string;
+    name: string;
+    repo_url: string;
+    default_branch: string;
+  };
+  approvals: Approval[];
+  audit_events: AuditEvent[];
+  conversations?: ConversationReference[];
+}
+
+export interface SwitchStatus {
+  switch_base_url: string;
+  connected: boolean;
+  registered_agents: string[];
+  active_rooms: string[];
+}
+
+export async function fetchHealth(): Promise<HealthStatus> {
+  const res = await fetch(`${API_BASE}/health`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Health check failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchIssues(status?: string): Promise<Issue[]> {
+  const url = new URL(`${API_BASE}/api/v1/issues`);
+  if (status) {
+    url.searchParams.set("status", status);
+  }
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch issues: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchIssueDetail(id: string): Promise<IssueDetail> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(id)}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch issue details: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function createIssue(data: {
+  title: string;
+  description: string;
+  expected_behavior?: string;
+  steps_attempted?: string;
+  reporter_environment?: Record<string, any>;
+}): Promise<Issue> {
+  const res = await fetch(`${API_BASE}/api/v1/issues`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Failed to create issue");
+  }
+  return res.json();
+}
+
+export async function triageIssue(
+  id: string,
+  decision: "ACCEPTED" | "REJECTED" | "REQUEST_INFORMATION" | "DEFERRED",
+  actor: string,
+  notes?: string
+): Promise<Issue> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(id)}/triage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision, actor, notes }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Triage failed");
+  }
+  return res.json();
+}
+
+export async function transitionIssue(
+  id: string,
+  targetStatus: string,
+  actor: string,
+  reason?: string
+): Promise<Issue> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/issues/${encodeURIComponent(id)}/transition`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target_status: targetStatus, actor, reason }),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Transition failed");
+  }
+  return res.json();
+}
+
+export async function fetchSwitchStatus(): Promise<SwitchStatus> {
+  const res = await fetch(`${API_BASE}/api/v1/switch/status`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error("Failed to fetch Switch status");
+  }
+  return res.json();
+}
+
+export async function fetchIssueRooms(id: string): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(id)}/rooms`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return res.json();
+}
+

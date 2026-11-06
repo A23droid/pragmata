@@ -10,6 +10,8 @@ from backend.app.api.v1.projects import router as projects_router
 from backend.app.api.v1.switch import router as switch_router
 from backend.app.core.config import settings
 from backend.app.core.logging import setup_logging
+from backend.app.schemas.switch import SwitchAgentRegistration
+from backend.app.services.switch_adapter import switch_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,22 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging()
     logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION} [{settings.ENVIRONMENT}]")
+
+    # Register the ORCHESTRATOR agent identity with Switch on startup.
+    # Best-effort: if Switch is unreachable the adapter degrades gracefully
+    # and the backend continues normally. Canonical state lives in PostgreSQL.
+    orchestrator = SwitchAgentRegistration(
+        agent_id="pragmata-orchestrator",
+        display_name="PRAGMATA Orchestrator",
+        role="ORCHESTRATOR",
+        capabilities=["state_management", "room_coordination", "task_dispatch"],
+    )
+    registered = await switch_adapter.register_agent(orchestrator)
+    logger.info(
+        f"Switch agent registration: {'OK' if registered else 'QUEUED'} "
+        f"(connected={switch_adapter.is_connected})"
+    )
+
     yield
     logger.info(f"Shutting down {settings.PROJECT_NAME}")
 

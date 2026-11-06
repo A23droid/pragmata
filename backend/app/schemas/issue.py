@@ -7,6 +7,7 @@ from backend.app.models.enums import ApprovalDecision, IssueStatus
 from backend.app.schemas.approval import ApprovalResponse
 from backend.app.schemas.audit import AuditEventResponse
 from backend.app.schemas.project import ProjectResponse
+from backend.app.schemas.switch import ConversationReferenceResponse
 
 
 class IssueCreate(BaseModel):
@@ -37,6 +38,7 @@ class IssueDetailResponse(IssueResponse):
     project: Optional[ProjectResponse] = None
     approvals: List[ApprovalResponse] = []
     audit_events: List[AuditEventResponse] = []
+    conversations: List[ConversationReferenceResponse] = []
 
 
 class IssueTriageRequest(BaseModel):

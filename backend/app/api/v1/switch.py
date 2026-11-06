@@ -22,6 +22,18 @@ async def get_switch_status():
     }
 
 
+@router.post("/agents", status_code=status.HTTP_201_CREATED)
+async def register_switch_agent(registration: SwitchAgentRegistration):
+    """Register an agent role or identity with Switch."""
+    ok = await switch_adapter.register_agent(registration)
+    return {
+        "status": "registered" if ok else "queued",
+        "agent_id": registration.agent_id,
+        "role": registration.role,
+        "connected": switch_adapter.is_connected,
+    }
+
+
 @router.post("/rooms")
 async def create_switch_room(room_req: SwitchRoomCreate):
     """Create or associate a Switch room with an issue."""
@@ -45,4 +57,3 @@ async def trigger_switch_handoff(handoff: SwitchHandoff):
     """Trigger a targeted task handoff in Switch."""
     ok = await switch_adapter.route_handoff(handoff)
     return {"status": "routed", "to_role": handoff.to_role}
-

@@ -5,10 +5,12 @@ import {
   fetchHealth,
   fetchIssues,
   fetchIssueDetail,
+  fetchSwitchStatus,
   createIssue,
   triageIssue,
   transitionIssue,
   HealthStatus,
+  SwitchStatus,
   Issue,
   IssueDetail,
 } from "@/lib/api";
@@ -23,7 +25,9 @@ import {
   Filter,
   History,
   Layers,
+  MessagesSquare,
   PlusCircle,
+  Radio,
   RefreshCw,
   Server,
   ShieldAlert,
@@ -34,6 +38,7 @@ import {
 
 export default function DashboardPage() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [switchStatus, setSwitchStatus] = useState<SwitchStatus | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [selectedIssueDetail, setSelectedIssueDetail] = useState<IssueDetail | null>(null);
@@ -59,11 +64,13 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [h, iss] = await Promise.all([
+      const [h, sw, iss] = await Promise.all([
         fetchHealth().catch(() => null),
+        fetchSwitchStatus().catch(() => null),
         fetchIssues(statusFilter || undefined).catch(() => []),
       ]);
       setHealth(h);
+      setSwitchStatus(sw);
       setIssues(iss);
       if (selectedIssueId) {
         await loadDetail(selectedIssueId);
@@ -161,22 +168,22 @@ export default function DashboardPage() {
       case "INVESTIGATING":
         return "bg-blue-950/60 text-blue-400 border-blue-800/60";
       case "REPRODUCING":
-        return "bg-purple-950/60 text-purple-400 border-purple-800/60";
+        return "bg-purple-950/60 text-purple-300 border-purple-800/60";
       case "REPRODUCED":
-        return "bg-amber-950/60 text-amber-400 border-amber-800/60";
+        return "bg-amber-950/60 text-amber-300 border-amber-800/60";
       case "AWAITING_DEVELOPER_TRIAGE":
         return "bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse";
       case "ACCEPTED":
-        return "bg-emerald-950/60 text-emerald-400 border-emerald-800/60";
+        return "bg-emerald-950/60 text-emerald-300 border-emerald-800/60";
       case "ROOT_CAUSE_ANALYSIS":
       case "FIX_STRATEGY_DISCUSSION":
-        return "bg-indigo-950/60 text-indigo-400 border-indigo-800/60";
+        return "bg-indigo-950/60 text-indigo-300 border-indigo-800/60";
       case "AWAITING_FIX_APPROVAL":
-        return "bg-cyan-500/20 text-cyan-300 border-cyan-500/40";
+        return "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 animate-pulse";
       case "IMPLEMENTING":
-        return "bg-cyan-950/60 text-cyan-400 border-cyan-800/60";
+        return "bg-violet-950/60 text-violet-300 border-violet-800/60";
       case "VERIFYING":
-        return "bg-yellow-950/60 text-yellow-400 border-yellow-800/60";
+        return "bg-sky-950/60 text-sky-300 border-sky-800/60";
       case "RESOLVED":
         return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
       case "REJECTED":
@@ -200,24 +207,34 @@ export default function DashboardPage() {
             <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
               PRAGMATA
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
-                Phase 2
+                Phase 3 &bull; Switch Native
               </span>
             </h1>
             <p className="text-[11px] text-slate-400">
-              Deterministic Workflow Engine & Bug Resolution Platform
+              Deterministic Workflow Engine &bull; Switch Agent Collaboration
             </p>
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
-          {/* Health Pill */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300">
+          {/* Switch Status Pill */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-mono">
+            {switchStatus?.connected ? (
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" />
+            ) : (
+              <span className="h-2 w-2 rounded-full bg-amber-400" />
+            )}
+            <span>Switch: {switchStatus?.connected ? "Live" : "Standby (Local Adapter)"}</span>
+          </div>
+
+          {/* Backend Health Pill */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-[11px] text-slate-300 font-mono">
             {health?.database === "connected" ? (
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
             ) : (
               <span className="h-2 w-2 rounded-full bg-amber-400" />
             )}
-            <span>Backend: {health?.status || "Connecting..."}</span>
+            <span>DB: {health?.database || "Connecting..."}</span>
           </div>
 
           <button
@@ -260,92 +277,111 @@ export default function DashboardPage() {
               <Filter className="w-3 h-3 text-slate-500" /> Filter:
             </span>
             {[
-              "",
-              "RECEIVED",
-              "INVESTIGATING",
-              "REPRODUCED",
-              "AWAITING_DEVELOPER_TRIAGE",
-              "ACCEPTED",
-              "RESOLVED",
-              "REJECTED",
-              "DEFERRED",
-            ].map((st) => (
+              { label: "All", value: "" },
+              { label: "Received", value: "RECEIVED" },
+              { label: "Investigating", value: "INVESTIGATING" },
+              { label: "Reproducing", value: "REPRODUCING" },
+              { label: "Awaiting Triage", value: "AWAITING_DEVELOPER_TRIAGE" },
+              { label: "Accepted", value: "ACCEPTED" },
+              { label: "RCA", value: "ROOT_CAUSE_ANALYSIS" },
+              { label: "Fix Discussion", value: "FIX_STRATEGY_DISCUSSION" },
+              { label: "Resolved", value: "RESOLVED" },
+            ].map((f) => (
               <button
-                key={st || "ALL"}
-                onClick={() => setStatusFilter(st)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors border ${
-                  statusFilter === st
-                    ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/50"
-                    : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border-slate-800"
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  statusFilter === f.value
+                    ? "bg-indigo-600 text-white font-semibold"
+                    : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
                 }`}
               >
-                {st || "ALL ISSUES"}
+                {f.label}
               </button>
             ))}
           </div>
 
-          <div className="text-xs text-slate-500 font-mono">
-            Total Issues: {issues.length}
+          <div className="text-xs text-slate-400">
+            Total Issues: <span className="font-mono font-bold text-slate-200">{issues.length}</span>
           </div>
         </div>
 
-        {/* Two-Column Layout: Issues List & Detail View */}
+        {/* Split Grid: Issue List + Detail Pane */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Issue List (5 cols on lg) */}
-          <div className="lg:col-span-5 space-y-2">
-            {issues.length === 0 ? (
-              <div className="p-8 rounded-xl border border-dashed border-slate-800 text-center space-y-3">
-                <Bug className="w-8 h-8 text-slate-600 mx-auto" />
-                <p className="text-xs text-slate-400">No issues matching criteria.</p>
+          {/* Issue List (Left column) */}
+          <div className="lg:col-span-5 space-y-3">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider px-1">
+              <span>Submitted Issues</span>
+              <span className="font-mono text-[11px] text-slate-500">Live Intake</span>
+            </div>
+
+            {loading && issues.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-xs">Loading issues...</div>
+            ) : issues.length === 0 ? (
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-8 text-center space-y-2">
+                <Bug className="w-8 h-8 mx-auto text-slate-600" />
+                <p className="text-xs text-slate-400">No issues reported yet.</p>
                 <button
                   onClick={() => setShowNewModal(true)}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium"
+                  className="text-xs text-indigo-400 hover:underline font-medium"
                 >
-                  Submit the first bug report
+                  Submit the first bug report &rarr;
                 </button>
               </div>
             ) : (
-              issues.map((issue) => (
-                <div
-                  key={issue.id}
-                  onClick={() => loadDetail(issue.id)}
-                  className={`p-3.5 rounded-lg border transition-all cursor-pointer ${
-                    selectedIssueId === issue.id
-                      ? "bg-slate-900 border-indigo-500/80 shadow-md shadow-indigo-950/50"
-                      : "bg-slate-900/40 hover:bg-slate-900/80 border-slate-800/80"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <span className="font-mono text-[11px] font-semibold text-indigo-400">
-                      {issue.id}
-                    </span>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-mono border ${getStatusColor(
-                        issue.status
-                      )}`}
+              <div className="space-y-2">
+                {issues.map((issue) => {
+                  const isSelected = selectedIssueId === issue.id;
+                  return (
+                    <div
+                      key={issue.id}
+                      onClick={() => loadDetail(issue.id)}
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2 ${
+                        isSelected
+                          ? "bg-slate-900 border-indigo-500/80 shadow-lg shadow-indigo-950/40"
+                          : "bg-slate-900/50 border-slate-800/80 hover:bg-slate-900 hover:border-slate-700"
+                      }`}
                     >
-                      {issue.status}
-                    </span>
-                  </div>
-                  <h3 className="text-xs font-semibold text-slate-200 line-clamp-1 mb-1">
-                    {issue.title}
-                  </h3>
-                  <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                    {issue.description}
-                  </p>
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2 font-mono">
-                    <span>{new Date(issue.created_at).toLocaleTimeString()}</span>
-                  </div>
-                </div>
-              ))
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-indigo-400">
+                          {issue.id}
+                        </span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-mono border ${getStatusColor(
+                            issue.status
+                          )}`}
+                        >
+                          {issue.status}
+                        </span>
+                      </div>
+                      <h3 className="text-xs font-semibold text-slate-200 line-clamp-1">
+                        {issue.title}
+                      </h3>
+                      <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                        {issue.description}
+                      </p>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/50">
+                        <span className="flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3" />
+                          {new Date(issue.created_at).toLocaleDateString()}
+                        </span>
+                        {issue.reporter_environment && (
+                          <span className="text-slate-400 font-mono">
+                            {issue.reporter_environment.browser || "Environment attached"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          {/* Issue Detail (7 cols on lg) */}
-          <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900/40 p-5 min-h-[500px]">
+          {/* Issue Detail & Triage Console (Right column) */}
+          <div className="lg:col-span-7 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 min-h-[500px]">
             {detailLoading ? (
-              <div className="flex items-center justify-center h-64 text-xs text-slate-500">
-                <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+              <div className="flex items-center justify-center h-80 text-xs text-slate-400">
                 Loading issue details...
               </div>
             ) : selectedIssueDetail ? (
@@ -407,6 +443,50 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   )}
+                </div>
+
+                {/* Switch Collaboration Rooms (Phase 3 Native Integration) */}
+                <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/15 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-indigo-300">
+                      <MessagesSquare className="w-4 h-4 text-indigo-400" />
+                      Switch Agent Collaboration Rooms (Phase 3)
+                    </div>
+                    <span className="text-[10px] text-indigo-400 font-mono">
+                      Persistent Context
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Dedicated rooms associated with this issue for real-time agent handoffs and human collaboration.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                    {selectedIssueDetail.conversations && selectedIssueDetail.conversations.length > 0 ? (
+                      selectedIssueDetail.conversations.map((c) => (
+                        <div
+                          key={c.id}
+                          className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5 space-y-1"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono font-bold text-indigo-400">
+                              {c.channel_type}
+                            </span>
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                          </div>
+                          <div className="font-mono text-[11px] text-slate-300 truncate" title={c.room_id}>
+                            {c.room_id}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            Role: {c.channel_type === "INVESTIGATION" ? "Intake & Repro" : c.channel_type === "RESOLUTION" ? "Architect & Critic" : "Implementer & Verifier"}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-3 text-xs text-slate-500 italic p-2 bg-slate-950/40 rounded border border-slate-800/60">
+                        Auto-provisioning Switch rooms for this issue...
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* HUMAN GATE: Developer Triage Section */}
