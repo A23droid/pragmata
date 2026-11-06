@@ -53,3 +53,6 @@ Thumbs.db
 
 # Docker / Temporary
 *.log
+
+# Demo embedded git fixtures
+demo/**/.git/
