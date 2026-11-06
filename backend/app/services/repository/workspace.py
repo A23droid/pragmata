@@ -198,6 +198,12 @@ class ManagedWorkspace:
                 err = sanitize_git_url(stderr.decode().strip())
                 raise RuntimeError(f"Failed to clone repository: {err}")
 
+        # Immediately scrub authentication credentials from .git/config origin URL to prevent sandbox leakage
+        try:
+            await self._run_git_cmd("remote", "set-url", "origin", sanitize_git_url(remote_url))
+        except Exception as ex:
+            logger.warning(f"Could not sanitize origin URL in git config: {ex}")
+
     async def _get_commit_sha(self) -> str:
         """Get current HEAD commit SHA."""
         return await self._run_git_cmd("rev-parse", "HEAD")

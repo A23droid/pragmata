@@ -91,3 +91,21 @@ class EvidenceResponse(BaseModel):
     line_end: Optional[int] = None
     provenance: ProvenanceType
     created_at: datetime
+
+
+class AgentTaskResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    issue_id: str
+    agent_role: str
+    status: str
+    task_input: Dict[str, Any] = Field(default_factory=dict)
+    task_output: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    parent_task_id: Optional[uuid.UUID] = None
+    timeout_seconds: int
+    retry_count: int
+    max_retries: int
+    created_at: datetime
+    updated_at: datetime

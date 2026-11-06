@@ -39,6 +39,7 @@ ALLOWED_TRANSITIONS: Dict[IssueStatus, Set[IssueStatus]] = {
         IssueStatus.NOT_REPRODUCED,
         IssueStatus.NEEDS_INFORMATION,
         IssueStatus.VERIFICATION_BLOCKED,
+        IssueStatus.AWAITING_DEVELOPER_TRIAGE,
     },
     IssueStatus.REPRODUCED: {
         IssueStatus.AWAITING_DEVELOPER_TRIAGE,

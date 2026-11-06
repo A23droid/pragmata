@@ -255,3 +255,88 @@ export async function fetchEvidence(issueId: string): Promise<EvidenceItem[]> {
   return res.json();
 }
 
+export interface AgentTaskItem {
+  id: string;
+  issue_id: string;
+  agent_role: string;
+  status: string;
+  task_input: Record<string, any>;
+  task_output?: Record<string, any> | null;
+  error_message?: string | null;
+  timeout_seconds: number;
+  retry_count: number;
+  max_retries: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvestigationLeadReport {
+  issue_id: string;
+  outcome: string;
+  summary: string;
+  structured_report: {
+    title: string;
+    summary: string;
+    expected_behaviour: string;
+    actual_behaviour: string;
+    missing_context: boolean;
+    clarification_questions: string[];
+    tags: string[];
+  };
+  code_investigation?: {
+    relevant_files: string[];
+    suspected_symbols: string[];
+    citations: Array<{
+      file_path: string;
+      line_start?: number;
+      line_end?: number;
+      snippet?: string;
+      relevance_note: string;
+    }>;
+    execution_path_summary: string;
+    suspected_root_cause_hypothesis?: string;
+    confidence_score: number;
+  };
+  reproduction_plan?: {
+    reproduction_strategy: string;
+    command_to_run: string;
+    expected_failure_pattern: string;
+    prerequisites_or_dependencies: string[];
+    can_run_offline: boolean;
+  };
+  sandbox_execution_performed: boolean;
+  evidence_validation?: {
+    outcome: string;
+    is_valid_reproduction: boolean;
+    evidence_summary: string;
+    actual_failure_matches_expected: boolean;
+    distinction_explanation: string;
+    missing_context_or_dependencies: string[];
+  };
+  triage_recommendation: string;
+  evidence_ids: string[];
+  next_step: string;
+}
+
+export async function runInvestigation(issueId: string): Promise<InvestigationLeadReport> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/investigate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Investigation workflow failed");
+  }
+  return res.json();
+}
+
+export async function fetchAgentTasks(issueId: string): Promise<AgentTaskItem[]> {
+  const res = await fetch(`${API_BASE}/api/v1/issues/${encodeURIComponent(issueId)}/tasks`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return res.json();
+}
+

@@ -238,3 +238,18 @@ class InvestigationService:
         )
         result = await db.execute(stmt)
         return result.scalars().all()
+
+    @classmethod
+    async def list_agent_tasks(
+        cls,
+        db: AsyncSession,
+        issue_id: str,
+    ) -> List[Any]:
+        from backend.app.models.entities import AgentTask
+        stmt = (
+            select(AgentTask)
+            .where(AgentTask.issue_id == issue_id)
+            .order_by(AgentTask.created_at.asc())
+        )
+        result = await db.execute(stmt)
+        return result.scalars().all()

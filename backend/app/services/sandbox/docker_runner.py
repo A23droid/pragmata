@@ -21,6 +21,9 @@ DANGEROUS_PATTERNS = [
     r"\brm\s+-rf\s+/[^\s]*",               # rm -rf /
     r":\(\)\s*\{\s*:\|:&\s*\};:",         # Fork bomb
     r"/var/run/docker\.sock",              # Docker socket mount attempt
+    r"docker\.sock",                       # Any reference to docker socket
+    r"\bdocker\s+(?:run|exec|build|create|commit|tag|push|pull|system)\b", # Container-in-container execution
+    r"\b(?:podman|containerd|crictl|runc)\b", # Alternative container runtimes
     r"\bcurl\s+.*\|\s*(?:bash|sh|zsh)",    # Piping web downloads to shell
     r"\bwget\s+.*\|\s*(?:bash|sh|zsh)",
     r"\bmkfs\b",                           # Filesystem format
@@ -104,6 +107,11 @@ class DockerSandbox:
         # 1. Enforce command policy check
         validate_command_policy(command)
 
+        # Validate workspace path is not a critical host system path
+        disallowed_paths = {Path("/"), Path("/etc"), Path("/var"), Path("/usr"), Path("/bin"), Path("/sbin"), Path("/root"), Path("/proc"), Path("/sys"), Path("/dev")}
+        if self.workspace_path in disallowed_paths or any(self.workspace_path == p for p in disallowed_paths):
+            raise CommandSecurityViolation(f"Mounting protected system path '{self.workspace_path}' into sandbox is forbidden.")
+
         # 2. Build docker run arguments with strict isolation
         mount_mode = "ro" if self.read_only_workspace else "rw"
         volume_mount = f"{self.workspace_path}:/workspace:{mount_mode}"
@@ -112,6 +120,9 @@ class DockerSandbox:
             "docker", "run",
             "--name", self.container_id,
             "--rm",
+            # Security capabilities & privileges
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges:true",
             # Resource constraints
             f"--cpus={settings.SANDBOX_MAX_CPU}",
             f"-m={settings.SANDBOX_MAX_MEMORY}",

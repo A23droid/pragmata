@@ -444,15 +444,15 @@ determine whether it can be reproduced.
 
 ### Exit criteria
 
--   [ ] A plain-language report triggers investigation.
--   [ ] Agents inspect the actual connected repository.
--   [ ] Reproduction runs in Docker.
--   [ ] Actual evidence is recorded.
--   [ ] The system correctly distinguishes the investigation outcomes.
--   [ ] Insufficient information can be requested.
--   [ ] Developer triage actions work.
--   [ ] Resolution cannot start before acceptance.
--   [ ] A full investigation can be observed in the actual Switch room.
+-   [x] A plain-language report triggers investigation.
+-   [x] Agents inspect the actual connected repository.
+-   [x] Reproduction runs in Docker.
+-   [x] Actual evidence is recorded.
+-   [x] The system correctly distinguishes the investigation outcomes.
+-   [x] Insufficient information can be requested.
+-   [x] Developer triage actions work.
+-   [x] Resolution cannot start before acceptance.
+-   [x] A full investigation can be observed in the actual Switch room.
 
 ------------------------------------------------------------------------
 

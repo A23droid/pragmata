@@ -12,6 +12,8 @@ import {
   inspectRepository,
   runSandbox,
   fetchEvidence,
+  runInvestigation,
+  fetchAgentTasks,
   HealthStatus,
   SwitchStatus,
   Issue,
@@ -19,19 +21,24 @@ import {
   RepoInspectionResult,
   SandboxExecutionResult,
   EvidenceItem,
+  InvestigationLeadReport,
+  AgentTaskItem,
 } from "@/lib/api";
 import {
   AlertCircle,
   ArrowRight,
+  Bot,
   Bug,
   CheckCircle2,
   Clock,
   Code2,
   Database,
+  ExternalLink,
   FileText,
   Filter,
   FolderGit2,
   GitBranch,
+  HelpCircle,
   History,
   Layers,
   MessagesSquare,
@@ -46,6 +53,7 @@ import {
   Terminal,
   User,
   X,
+  Zap,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -72,7 +80,7 @@ export default function DashboardPage() {
   const [triageActor, setTriageActor] = useState("developer@pragmata.internal");
   const [triageNotes, setTriageNotes] = useState("");
 
-  // Phase 5 Investigation & Sandbox State
+  // Phase 5 & 6 Investigation & Sandbox State
   const [inspection, setInspection] = useState<RepoInspectionResult | null>(null);
   const [sandboxResult, setSandboxResult] = useState<SandboxExecutionResult | null>(null);
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
@@ -80,6 +88,11 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isInspecting, setIsInspecting] = useState(false);
   const [isRunningSandbox, setIsRunningSandbox] = useState(false);
+
+  // Phase 6 Full Multi-Agent Investigation State
+  const [investigationReport, setInvestigationReport] = useState<InvestigationLeadReport | null>(null);
+  const [agentTasks, setAgentTasks] = useState<AgentTaskItem[]>([]);
+  const [isInvestigating, setIsInvestigating] = useState(false);
 
   const refreshAll = async () => {
     setLoading(true);
@@ -106,17 +119,35 @@ export default function DashboardPage() {
   const loadDetail = async (id: string) => {
     setDetailLoading(true);
     try {
-      const [detail, ev] = await Promise.all([
+      const [detail, ev, tasks] = await Promise.all([
         fetchIssueDetail(id),
         fetchEvidence(id).catch(() => []),
+        fetchAgentTasks(id).catch(() => []),
       ]);
       setSelectedIssueDetail(detail);
       setSelectedIssueId(id);
       setEvidenceList(ev);
+      setAgentTasks(tasks);
     } catch (err: any) {
       setError(err.message || "Failed to load issue detail");
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleRunInvestigation = async () => {
+    if (!selectedIssueId) return;
+    setIsInvestigating(true);
+    setError(null);
+    try {
+      const report = await runInvestigation(selectedIssueId);
+      setInvestigationReport(report);
+      await refreshAll();
+      await loadDetail(selectedIssueId);
+    } catch (err: any) {
+      setError(err.message || "Investigation workflow failed");
+    } finally {
+      setIsInvestigating(false);
     }
   };
 
@@ -265,7 +296,7 @@ export default function DashboardPage() {
             <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
               PRAGMATA
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
-                Phase 5 &bull; Safe Docker Sandbox
+                Phase 6 &bull; Bug Investigation &amp; Reproduction
               </span>
             </h1>
             <p className="text-[11px] text-slate-400">
@@ -547,6 +578,236 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
+                {/* PHASE 6: Multi-Agent Bug Investigation & Reproduction Workflow */}
+                <div className="rounded-xl border border-amber-500/40 bg-amber-950/15 p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
+                      <Bot className="w-4 h-4 text-amber-400" />
+                      Multi-Agent Bug Investigation &amp; Reproduction (Phase 6)
+                    </div>
+                    <span className="text-[10px] text-amber-400 font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+                      Investigation Lead Coordinator
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Coordinates <strong>Intake Agent</strong>, <strong>Investigator</strong>, <strong>Reproducer</strong>, and <strong>Evidence Validator</strong>. Inspects repository files, executes minimal reproduction strictly inside the Docker sandbox, validates facts versus hypotheses, records real evidence to PostgreSQL, and posts updates to Switch.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <button
+                      onClick={handleRunInvestigation}
+                      disabled={isInvestigating || actionLoading}
+                      className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-lg shadow-amber-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <Zap className={`w-4 h-4 ${isInvestigating ? "animate-spin" : ""}`} />
+                      <span>{isInvestigating ? "Investigating & Running Reproduction..." : "Run AI Bug Investigation & Reproduction"}</span>
+                    </button>
+
+                    {agentTasks.length > 0 && (
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        {agentTasks.length} agent tasks recorded in PostgreSQL
+                      </span>
+                    )}
+                  </div>
+
+                  {isInvestigating && (
+                    <div className="p-3.5 rounded-lg bg-slate-950 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2.5 animate-pulse">
+                      <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                      <span>Investigation Lead is delegating tasks to Intake Agent, Investigator, Reproducer, and Evidence Validator... Running reproduction in isolated Docker sandbox.</span>
+                    </div>
+                  )}
+
+                  {/* Active Investigation Lead Report */}
+                  {investigationReport && (
+                    <div className="rounded-xl bg-slate-950 border border-slate-800 p-4 space-y-4 text-xs">
+                      {/* Outcome Header Banner */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-slate-400 uppercase font-mono">Verdict:</span>
+                          <span
+                            className={`px-3 py-1 rounded-full font-mono font-bold text-xs border ${
+                              investigationReport.outcome === "REPRODUCED"
+                                ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
+                                : investigationReport.outcome === "NOT_REPRODUCED"
+                                ? "bg-slate-800 text-slate-300 border-slate-700"
+                                : investigationReport.outcome === "NEEDS_INFORMATION"
+                                ? "bg-sky-500/20 text-sky-300 border-sky-500/50"
+                                : investigationReport.outcome === "ENVIRONMENT_DEPENDENT"
+                                ? "bg-purple-500/20 text-purple-300 border-purple-500/50"
+                                : "bg-rose-500/20 text-rose-300 border-rose-500/50"
+                            }`}
+                          >
+                            {investigationReport.outcome}
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-400">
+                          Next Step: <span className="text-indigo-400 font-semibold">{investigationReport.next_step}</span>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded bg-slate-900 border border-slate-800 text-slate-300 leading-relaxed">
+                        <div className="text-[10px] uppercase font-mono text-slate-500 mb-1">Investigation Summary:</div>
+                        {investigationReport.summary}
+                      </div>
+
+                      {/* Structured Intake Report */}
+                      {investigationReport.structured_report && (
+                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
+                              <FileText className="w-3.5 h-3.5 text-indigo-400" /> Intake Agent Analysis
+                            </span>
+                            {investigationReport.structured_report.tags.length > 0 && (
+                              <div className="flex gap-1">
+                                {investigationReport.structured_report.tags.map((t) => (
+                                  <span key={t} className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/50 font-mono">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                            <div>
+                              <span className="text-slate-500">Expected:</span> <span className="text-slate-300">{investigationReport.structured_report.expected_behaviour}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Actual:</span> <span className="text-slate-300">{investigationReport.structured_report.actual_behaviour}</span>
+                            </div>
+                          </div>
+                          {investigationReport.structured_report.missing_context && (
+                            <div className="p-2 rounded bg-amber-950/30 border border-amber-800/60 text-amber-300 space-y-1">
+                              <div className="font-semibold flex items-center gap-1 text-[10px] uppercase">
+                                <HelpCircle className="w-3 h-3 text-amber-400" /> Missing Information Requested:
+                              </div>
+                              <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                                {investigationReport.structured_report.clarification_questions.map((q, idx) => (
+                                  <li key={idx}>{q}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Code Citations (Investigator) */}
+                      {investigationReport.code_investigation && (
+                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-sky-300 flex items-center gap-1.5">
+                              <Code2 className="w-3.5 h-3.5 text-sky-400" /> Investigator Findings &amp; Code Citations
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Confidence: {Math.round(investigationReport.code_investigation.confidence_score * 100)}%
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] text-slate-400">
+                            Relevant Files: <span className="font-mono text-slate-200">{investigationReport.code_investigation.relevant_files.join(", ")}</span>
+                          </div>
+
+                          {investigationReport.code_investigation.citations && investigationReport.code_investigation.citations.length > 0 && (
+                            <div className="space-y-1.5 pt-1">
+                              <div className="text-[10px] uppercase font-mono text-slate-500">Evidence Citations:</div>
+                              {investigationReport.code_investigation.citations.map((c, idx) => (
+                                <div key={idx} className="p-2 rounded bg-slate-950 border border-slate-800 space-y-1 font-mono text-[11px]">
+                                  <div className="flex items-center justify-between text-sky-400">
+                                    <span>{c.file_path}{c.line_start ? `:${c.line_start}` : ""}{c.line_end ? `-${c.line_end}` : ""}</span>
+                                    <span className="text-[10px] text-slate-500 font-sans">Evidence Citation</span>
+                                  </div>
+                                  {c.snippet && (
+                                    <pre className="p-1.5 rounded bg-slate-900 text-slate-300 text-[10px] overflow-x-auto">
+                                      {c.snippet}
+                                    </pre>
+                                  )}
+                                  <div className="text-slate-400 font-sans text-[11px]">
+                                    {c.relevance_note}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {investigationReport.code_investigation.suspected_root_cause_hypothesis && (
+                            <div className="p-2 rounded bg-indigo-950/40 border border-indigo-800/60 text-indigo-300">
+                              <span className="font-semibold text-[10px] uppercase block mb-0.5 text-indigo-400">
+                                Suspected Root Cause Hypothesis [Separated from Verified Reproduction]:
+                              </span>
+                              <span className="text-[11px] text-slate-200">{investigationReport.code_investigation.suspected_root_cause_hypothesis}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Reproduction Plan & Execution Result */}
+                      {investigationReport.reproduction_plan && (
+                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-purple-300 flex items-center gap-1.5">
+                              <Terminal className="w-3.5 h-3.5 text-purple-400" /> Reproducer Sandbox Plan
+                            </span>
+                            <span className="text-[10px] text-purple-400 font-mono">
+                              Docker Read-Only Isolation
+                            </span>
+                          </div>
+                          <div className="space-y-1 font-mono text-[11px]">
+                            <div className="text-slate-400">
+                              Command: <code className="text-purple-300 px-1 py-0.5 rounded bg-slate-950 border border-slate-800">{investigationReport.reproduction_plan.command_to_run}</code>
+                            </div>
+                            <div className="text-slate-400">
+                              Expected Pattern: <span className="text-amber-300">{investigationReport.reproduction_plan.expected_failure_pattern}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Evidence Validation Verdict */}
+                      {investigationReport.evidence_validation && (
+                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Evidence Validator Verdict
+                            </span>
+                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${investigationReport.evidence_validation.is_valid_reproduction ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
+                              {investigationReport.evidence_validation.is_valid_reproduction ? "Reproduction Confirmed" : "Not Confirmed"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 leading-relaxed">
+                            {investigationReport.evidence_validation.evidence_summary}
+                          </p>
+                          <div className="text-[10px] text-slate-400 italic border-t border-slate-800/60 pt-1">
+                            {investigationReport.evidence_validation.distinction_explanation}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Agent Task Audit Cards */}
+                  {agentTasks.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                      <div className="text-[10px] uppercase font-mono text-slate-400 flex items-center gap-1">
+                        <Layers className="w-3 h-3 text-amber-400" /> Agent Tasks Execution Trail ({agentTasks.length})
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {agentTasks.map((t) => (
+                          <div key={t.id} className="p-2 rounded bg-slate-950/80 border border-slate-800 text-[11px] space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono font-bold text-amber-400">{t.agent_role}</span>
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${t.status === "COMPLETED" ? "bg-emerald-950 text-emerald-300 border border-emerald-800/60" : "bg-slate-800 text-slate-400"}`}>
+                                {t.status}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              Retries: {t.retry_count}/{t.max_retries} &bull; Timeout: {t.timeout_seconds}s
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* PHASE 5: Repository Connection & Base Commit Inspection */}
                 <div className="rounded-xl border border-sky-900/50 bg-sky-950/15 p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -777,6 +1038,34 @@ export default function DashboardPage() {
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     AI agents investigate and provide reproduction evidence. Only an authenticated developer can accept the bug before root-cause analysis or solution design begins.
                   </p>
+
+                  {/* Triage Gate Status Banner */}
+                  {selectedIssueDetail.status === "AWAITING_DEVELOPER_TRIAGE" ? (
+                    <div className="p-2.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                      <span><strong>Action Required:</strong> Investigation complete. Review the evidence above and choose a developer triage decision below.</span>
+                    </div>
+                  ) : selectedIssueDetail.status === "ACCEPTED" ? (
+                    <div className="p-2.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                      <span><strong>Issue Accepted:</strong> Developer approved this bug. Ready for Phase 7 Fix Strategy Discussion &amp; Solution Architect.</span>
+                    </div>
+                  ) : selectedIssueDetail.status === "REJECTED" ? (
+                    <div className="p-2.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+                      <X className="w-4 h-4 shrink-0 text-rose-400" />
+                      <span><strong>Issue Rejected:</strong> Closed by developer.</span>
+                    </div>
+                  ) : selectedIssueDetail.status === "NEEDS_INFORMATION" ? (
+                    <div className="p-2.5 rounded-lg bg-sky-500/20 border border-sky-500/40 text-sky-300 text-xs flex items-center gap-2">
+                      <HelpCircle className="w-4 h-4 shrink-0 text-sky-400" />
+                      <span><strong>Needs Information:</strong> Intake Agent flagged missing context. Waiting for reporter clarification.</span>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-xs flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 shrink-0 text-indigo-400" />
+                      <span><strong>Resolution Gate Locked:</strong> Resolution agents cannot be activated before bug investigation and developer acceptance.</span>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
                     <div>

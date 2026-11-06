@@ -38,8 +38,8 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: Optional[str] = None
     WORKSPACE_BASE_DIR: str = "/tmp/pragmata_workspaces"
 
-    # Docker Sandbox (Phase 5)
-    SANDBOX_DEFAULT_IMAGE: str = "alpine:latest"
+    # Docker Sandbox (Phase 5 & 6)
+    SANDBOX_DEFAULT_IMAGE: str = "python:3.11-alpine@sha256:bb1d70c1df30d8ee1e05214dbe82d6cdfd29833c1f47ce917f20991aca93acaa"
     SANDBOX_DEFAULT_TIMEOUT: int = 30
     SANDBOX_MAX_CPU: str = "1.0"
     SANDBOX_MAX_MEMORY: str = "512m"

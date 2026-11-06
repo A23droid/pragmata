@@ -112,26 +112,48 @@ class GroqProvider(LLMProvider):
 
     def _build_stub_for_schema(self, schema: Type[T]) -> T:
         """Create a minimally valid stub instance for testing when offline."""
+        import types
+        from enum import Enum
+        from typing import get_args, get_origin
+
         fields = schema.model_fields
         stub_data = {}
         for name, field in fields.items():
-            if field.annotation == str:
+            if not field.is_required() and field.default is not None and field.default is not ...:
+                continue
+
+            ann = field.annotation
+            origin = get_origin(ann)
+            args = get_args(ann)
+
+            # Unwrap Optional[X] / Union[X, None]
+            if origin is types.UnionType or origin is getattr(types, "Union", None) or str(origin) == "typing.Union":
+                non_none = [a for a in args if a is not type(None)]
+                if non_none:
+                    ann = non_none[0]
+                    origin = get_origin(ann)
+                    args = get_args(ann)
+
+            if isinstance(ann, type) and issubclass(ann, Enum):
+                stub_data[name] = list(ann)[0].value
+            elif isinstance(ann, type) and issubclass(ann, BaseModel):
+                stub_data[name] = self._build_stub_for_schema(ann)
+            elif ann == str:
                 stub_data[name] = f"Test {name}"
-            elif field.annotation == int:
+            elif ann == int:
                 stub_data[name] = 1
-            elif field.annotation == float:
+            elif ann == float:
                 stub_data[name] = 0.95
-            elif field.annotation == bool:
+            elif ann == bool:
                 stub_data[name] = True
-            elif getattr(field.annotation, "__origin__", None) == list:
+            elif origin == list or ann == list:
                 stub_data[name] = []
-            elif getattr(field.annotation, "__origin__", None) == dict:
+            elif origin == dict or ann == dict:
                 stub_data[name] = {}
             else:
                 stub_data[name] = None
         try:
             return schema.model_validate(stub_data)
         except ValidationError:
-            # Fallback if defaults suffice
             return schema.model_construct(**stub_data)
 

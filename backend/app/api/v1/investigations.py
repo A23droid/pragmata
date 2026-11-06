@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_db
 from backend.app.schemas.investigation import (
+    AgentTaskResponse,
     EvidenceCreate,
     EvidenceResponse,
     InvestigationCreate,
@@ -13,9 +14,40 @@ from backend.app.schemas.investigation import (
     SandboxRunRequest,
     SandboxRunResponse,
 )
+from backend.app.services.agents.investigation_coordinator import investigation_coordinator
+from backend.app.services.agents.roles import InvestigationLeadReport
 from backend.app.services.investigation_service import InvestigationService
 
 router = APIRouter(prefix="/issues/{issue_id}", tags=["Investigation & Sandbox"])
+
+
+@router.post("/investigate", response_model=InvestigationLeadReport)
+async def run_investigation_workflow(
+    issue_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Trigger the complete hierarchical bug investigation & reproduction workflow.
+    Investigation Lead coordinates Intake Agent, Investigator, Reproducer, and Evidence Validator.
+    All findings, sandbox reproduction results, and evidence are persisted to PostgreSQL
+    and reported to the issue's Switch collaboration room.
+    """
+    return await investigation_coordinator.run_investigation(
+        db=db,
+        issue_id=issue_id,
+    )
+
+
+@router.get("/tasks", response_model=List[AgentTaskResponse])
+async def list_agent_tasks(
+    issue_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all agent tasks executed for this issue."""
+    return await InvestigationService.list_agent_tasks(
+        db=db,
+        issue_id=issue_id,
+    )
 
 
 @router.post("/inspect", response_model=RepoInspectResponse)
