@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     GEMINI_API_KEY: Optional[str] = None
 
+    # Developer Authentication & Authorization (Phase 7)
+    DEVELOPER_API_KEYS: List[str] = [
+        "dev-secret-key-pragmata",
+        "developer_test_token",
+    ]
+    DEVELOPER_DEFAULT_ID: str = "lead_developer"
+
     # GitHub & Repository Workspace (Phase 5)
     GITHUB_TOKEN: Optional[str] = None
     WORKSPACE_BASE_DIR: str = "/tmp/pragmata_workspaces"

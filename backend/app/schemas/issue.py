@@ -7,6 +7,7 @@ from backend.app.models.enums import ApprovalDecision, IssueStatus
 from backend.app.schemas.approval import ApprovalResponse
 from backend.app.schemas.audit import AuditEventResponse
 from backend.app.schemas.project import ProjectResponse
+from backend.app.schemas.resolution import SolutionResponse
 from backend.app.schemas.switch import ConversationReferenceResponse
 
 
@@ -39,11 +40,12 @@ class IssueDetailResponse(IssueResponse):
     approvals: List[ApprovalResponse] = []
     audit_events: List[AuditEventResponse] = []
     conversations: List[ConversationReferenceResponse] = []
+    solutions: List[SolutionResponse] = []
 
 
 class IssueTriageRequest(BaseModel):
     decision: ApprovalDecision = Field(..., description="Developer triage decision: ACCEPTED, REJECTED, REQUEST_INFORMATION, DEFERRED")
-    actor: str = Field(..., min_length=1, max_length=255, description="Name or identifier of the developer")
+    actor: Optional[str] = Field(None, max_length=255, description="Optional caller hint; server authentication overrides this.")
     notes: Optional[str] = Field(None, description="Optional explanation or triage notes")
 
 

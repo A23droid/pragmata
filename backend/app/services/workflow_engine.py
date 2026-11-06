@@ -1,10 +1,11 @@
 import logging
+import uuid
 from typing import Any, Dict, Optional, Set
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.models.entities import Approval, AuditEvent, Issue, VerificationRun
+from backend.app.models.entities import Approval, AuditEvent, Issue, Solution, VerificationRun
 from backend.app.models.enums import (
     ApprovalDecision,
     ApprovalTarget,
@@ -302,3 +303,115 @@ class WorkflowEngine:
             f"Developer triage on {issue_id}: {decision.value} by {actor}. Status now {target_status.value}."
         )
         return issue
+
+    @classmethod
+    async def approve_fix_strategy(
+        cls,
+        db: AsyncSession,
+        issue_id: str,
+        decision: ApprovalDecision,
+        actor: str,
+        solution_id: Optional[Any] = None,
+        custom_strategy: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> Approval:
+        """
+        Record developer decision at the fix approval gate.
+        Enforces server-side authentication, checks solution validity or custom strategy,
+        and records official Approval entity with target_type=FIX_STRATEGY.
+        """
+        issue = await cls.get_issue_with_lock(db, issue_id)
+
+        if issue.status != IssueStatus.AWAITING_FIX_APPROVAL:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Issue '{issue_id}' is in status '{issue.status.value}' and cannot undergo fix approval. "
+                    "Issue must be in 'AWAITING_FIX_APPROVAL'."
+                ),
+            )
+
+        sol_uuid: Optional[uuid.UUID] = None
+        if solution_id:
+            try:
+                sol_uuid = uuid.UUID(str(solution_id))
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid solution_id format: '{solution_id}'",
+                )
+
+        # Validate decision specifics
+        if decision == ApprovalDecision.FIX_APPROVED:
+            if not sol_uuid:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="solution_id is required when approving a proposed fix strategy.",
+                )
+            # Verify solution exists for this issue
+            sol_stmt = select(Solution).where(Solution.id == sol_uuid, Solution.issue_id == issue_id)
+            sol_res = await db.execute(sol_stmt)
+            if not sol_res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Solution '{sol_uuid}' does not exist for issue '{issue_id}'.",
+                )
+        elif decision == ApprovalDecision.CUSTOM_STRATEGY_APPROVED:
+            if not custom_strategy or not custom_strategy.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="custom_strategy description is required when approving a custom strategy.",
+                )
+        elif decision in (ApprovalDecision.REJECTED, ApprovalDecision.DEFERRED, ApprovalDecision.REQUEST_INFORMATION):
+            pass
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid fix approval decision '{decision.value}'.",
+            )
+
+        # Record human approval
+        approval = Approval(
+            issue_id=issue_id,
+            decision=decision,
+            target_type=ApprovalTarget.FIX_STRATEGY,
+            solution_id=sol_uuid,
+            custom_strategy=custom_strategy.strip() if custom_strategy else None,
+            actor=actor,
+            notes=notes,
+        )
+        db.add(approval)
+
+        # Handle workflow state updates based on decision
+        target_status = issue.status
+        if decision == ApprovalDecision.REJECTED:
+            issue.status = IssueStatus.REJECTED
+            target_status = IssueStatus.REJECTED
+        elif decision == ApprovalDecision.DEFERRED:
+            issue.status = IssueStatus.DEFERRED
+            target_status = IssueStatus.DEFERRED
+        elif decision == ApprovalDecision.REQUEST_INFORMATION:
+            issue.status = IssueStatus.FIX_STRATEGY_DISCUSSION
+            target_status = IssueStatus.FIX_STRATEGY_DISCUSSION
+
+        audit = AuditEvent(
+            issue_id=issue_id,
+            event_type="FIX_APPROVAL",
+            from_state=IssueStatus.AWAITING_FIX_APPROVAL.value,
+            to_state=target_status.value,
+            actor=actor,
+            payload={
+                "decision": decision.value,
+                "solution_id": str(sol_uuid) if sol_uuid else None,
+                "custom_strategy": custom_strategy,
+                "notes": notes or "",
+            },
+        )
+        db.add(audit)
+        await db.commit()
+        await db.refresh(approval)
+
+        logger.info(
+            f"Fix strategy decision on {issue_id}: {decision.value} by {actor}."
+        )
+        return approval

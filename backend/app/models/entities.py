@@ -173,14 +173,26 @@ class Solution(Base):
     issue_id: Mapped[str] = mapped_column(ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True)
 
     title: Mapped[str] = mapped_column(String(512), nullable=False)
+    strategy_type: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
     affected_files: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
+    expected_changes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    advantages: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
+    disadvantages: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
+    security_implications: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    regression_risks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     correctness_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     maintainability_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     risks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     complexity_score: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     is_recommended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    critique: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    evaluation: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    scope_assessment: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    supporting_evidence_ids: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 

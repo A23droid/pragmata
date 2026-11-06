@@ -9,6 +9,25 @@ from backend.app.main import app
 
 
 @pytest.fixture
+async def db_session():
+    test_engine = create_async_engine(
+        settings.DATABASE_URL,
+        poolclass=NullPool,
+        future=True,
+    )
+    test_session_maker = async_sessionmaker(
+        bind=test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+    async with test_session_maker() as session:
+        yield session
+    await test_engine.dispose()
+
+
+@pytest.fixture
 async def async_client():
     test_engine = create_async_engine(
         settings.DATABASE_URL,

@@ -483,9 +483,32 @@ class InvestigationCoordinator:
                 missing_deps.append("Offline sandbox network or missing system runtime/package.")
             elif sandbox_result.exit_code != 0:
                 # Failure observed! Check if failure matches expected defect pattern
-                exp_pattern = reproducer_plan.expected_failure_pattern.lower()
+                exp_pattern = reproducer_plan.expected_failure_pattern.lower().strip()
                 combined_output = (sandbox_result.stdout + "\n" + sandbox_result.stderr).lower()
-                if exp_pattern in combined_output or len(exp_pattern) < 3 or "error" in combined_output or "fail" in combined_output:
+
+                # Check for command execution errors, missing binary, or syntax errors that aren't the defect
+                is_shell_or_syntax_error = any(
+                    err in combined_output
+                    for err in [
+                        "/bin/sh:",
+                        "sh: 1:",
+                        "command not found",
+                        "syntaxerror:",
+                        "syntax error",
+                        "permission denied",
+                        "cannot execute",
+                    ]
+                ) and (exp_pattern not in combined_output)
+
+                # Invariant: REPRODUCED requires matching actual execution evidence against the specific defect pattern,
+                # NOT merely a non-zero exit code or generic terms like 'error' or 'fail'.
+                pattern_is_meaningful = len(exp_pattern) >= 4 and exp_pattern not in {"error", "fail", "failed", "test"}
+                matches_expected_pattern = pattern_is_meaningful and (exp_pattern in combined_output)
+
+                if is_shell_or_syntax_error:
+                    deterministic_outcome = InvestigationOutcome.ENVIRONMENT_DEPENDENT
+                    missing_deps.append("Command syntax error or tool unavailable in sandbox.")
+                elif matches_expected_pattern:
                     deterministic_outcome = InvestigationOutcome.REPRODUCED
                     is_valid_repro = True
                     actual_matches = True

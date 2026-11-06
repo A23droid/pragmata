@@ -34,6 +34,56 @@ DANGEROUS_PATTERNS = [
     r"\breboot\b",
 ]
 
+# Strict pinned digest pattern: must contain @sha256:<64 hex chars>
+PINNED_DIGEST_REGEX = re.compile(r"^.+@sha256:[a-f0-9]{64}$", re.IGNORECASE)
+
+KNOWN_PINNED_IMAGES = {
+    settings.SANDBOX_DEFAULT_IMAGE,
+    "alpine@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a",
+    "alpine:latest@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a",
+}
+
+
+def validate_image_pinning(image: str) -> str:
+    """
+    Validate that the Docker sandbox image is immutably pinned with a cryptographic sha256 digest.
+    Eliminates supply chain attacks, mutable tag substitution, and unverified registry downloads.
+    """
+    image_str = image.strip()
+    if "@sha256:" not in image_str:
+        if image_str in ("alpine", "alpine:latest"):
+            return "alpine@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a"
+        if image_str in ("python:3.11-alpine", "python:alpine"):
+            return settings.SANDBOX_DEFAULT_IMAGE
+        raise CommandSecurityViolation(
+            f"Image '{image_str}' is unpinned. Sandbox images must be explicitly pinned by sha256 digest (@sha256:)."
+        )
+
+    if not PINNED_DIGEST_REGEX.match(image_str):
+        raise CommandSecurityViolation(
+            f"Image '{image_str}' has an invalid sha256 digest format."
+        )
+    return image_str
+
+
+def validate_workspace_isolation(workspace_path: Path) -> None:
+    """
+    Ensure the workspace path does not mount critical host directories or expose Docker daemon sockets.
+    """
+    disallowed_paths = {
+        Path("/"), Path("/etc"), Path("/var"), Path("/usr"), Path("/bin"),
+        Path("/sbin"), Path("/root"), Path("/proc"), Path("/sys"), Path("/dev"),
+        Path("/run"), Path("/var/run"),
+    }
+    resolved = workspace_path.resolve()
+    if resolved in disallowed_paths or any(resolved == p for p in disallowed_paths):
+        raise CommandSecurityViolation(f"Mounting protected system path '{workspace_path}' into sandbox is forbidden.")
+
+    # Guard against Docker daemon access via socket in workspace
+    sock = resolved / "docker.sock"
+    if sock.exists() or any("docker.sock" in p.name for p in resolved.glob("*.sock")):
+        raise CommandSecurityViolation("Workspace contains docker daemon socket. Mounting is forbidden.")
+
 
 @dataclass
 class SandboxResult:
@@ -89,7 +139,7 @@ class DockerSandbox:
         read_only_workspace: bool = False,
     ):
         self.workspace_path = workspace_path.resolve()
-        self.image = image or settings.SANDBOX_DEFAULT_IMAGE
+        self.image = validate_image_pinning(image or settings.SANDBOX_DEFAULT_IMAGE)
         self.timeout_seconds = timeout_seconds or settings.SANDBOX_DEFAULT_TIMEOUT
         self.network_enabled = network_enabled
         self.read_only_workspace = read_only_workspace
@@ -104,13 +154,9 @@ class DockerSandbox:
         Execute a controlled command inside the sandbox container.
         Enforces policy validation, resource bounds, timeouts, and cleanup.
         """
-        # 1. Enforce command policy check
+        # 1. Enforce command policy check and workspace isolation
         validate_command_policy(command)
-
-        # Validate workspace path is not a critical host system path
-        disallowed_paths = {Path("/"), Path("/etc"), Path("/var"), Path("/usr"), Path("/bin"), Path("/sbin"), Path("/root"), Path("/proc"), Path("/sys"), Path("/dev")}
-        if self.workspace_path in disallowed_paths or any(self.workspace_path == p for p in disallowed_paths):
-            raise CommandSecurityViolation(f"Mounting protected system path '{self.workspace_path}' into sandbox is forbidden.")
+        validate_workspace_isolation(self.workspace_path)
 
         # 2. Build docker run arguments with strict isolation
         mount_mode = "ro" if self.read_only_workspace else "rw"
@@ -120,17 +166,18 @@ class DockerSandbox:
             "docker", "run",
             "--name", self.container_id,
             "--rm",
-            # Security capabilities & privileges
+            # Security capabilities & privileges (Least Privilege)
             "--cap-drop=ALL",
             "--security-opt=no-new-privileges:true",
+            # Filesystem restrictions & Immutable Rootfs
+            "--read-only",
+            "-v", volume_mount,
+            "-w", "/workspace",
+            "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
             # Resource constraints
             f"--cpus={settings.SANDBOX_MAX_CPU}",
             f"-m={settings.SANDBOX_MAX_MEMORY}",
             "--pids-limit=100",
-            # Filesystem restrictions
-            "-v", volume_mount,
-            "-w", "/workspace",
-            "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
             # User isolation (UID 1000)
             "--user", "1000:1000",
         ]

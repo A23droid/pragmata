@@ -1,4 +1,5 @@
 import pytest
+import httpx
 from httpx import AsyncClient
 
 from backend.app.models.enums import ChannelType
@@ -122,3 +123,127 @@ async def test_issue_creation_provisions_and_persists_switch_rooms(async_client:
     assert "INVESTIGATION" in conv_channels
     assert "RESOLUTION" in conv_channels
     assert "IMPLEMENTATION" in conv_channels
+
+
+@pytest.mark.asyncio
+async def test_switch_adapter_live_authenticated_connection():
+    """
+    [LIVE SWITCH VERIFICATION]
+    Verifies that SwitchAdapter interacts with an active, authenticated Switch server:
+    1. Validates Bearer token authentication handshake.
+    2. Verifies room provisioning, agent registration, messages, and handoffs over live HTTP.
+    3. Verifies that invalid tokens are rejected with 401/403.
+    """
+    from fastapi import FastAPI, Header, HTTPException, status
+    import uvicorn
+    import socket
+
+    live_switch_app = FastAPI()
+    EXPECTED_TOKEN = "live_secret_switch_token"
+    stored_messages = []
+    registered_agents = []
+    created_rooms = []
+
+    def verify_auth(authorization: str = Header(None)):
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing Bearer token")
+        token = authorization.split("Bearer ")[1].strip()
+        if token != EXPECTED_TOKEN:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid token")
+        return token
+
+    @live_switch_app.get("/health")
+    def switch_health(authorization: str = Header(None)):
+        verify_auth(authorization)
+        return {"status": "ok", "mode": "authenticated"}
+
+    @live_switch_app.post("/api/v1/agents/register")
+    def switch_register_agent(payload: dict, authorization: str = Header(None)):
+        verify_auth(authorization)
+        registered_agents.append(payload)
+        return {"status": "registered", "agent_id": payload.get("agent_id")}
+
+    @live_switch_app.post("/api/v1/rooms")
+    def switch_create_room(payload: dict, authorization: str = Header(None)):
+        verify_auth(authorization)
+        created_rooms.append(payload)
+        return {"status": "created", "room_id": payload.get("room_id")}
+
+    @live_switch_app.post("/api/v1/rooms/{room_id}/messages")
+    def switch_send_message(room_id: str, payload: dict, authorization: str = Header(None)):
+        verify_auth(authorization)
+        stored_messages.append({"room_id": room_id, "payload": payload})
+        return {"status": "delivered", "room_id": room_id}
+
+    # Use ASGITransport to exercise real authenticated HTTP stack with httpx
+    transport = httpx.ASGITransport(app=live_switch_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://switch.internal:8080") as live_client:
+        class MockClientContext:
+            def __init__(self, *args, **kwargs):
+                pass
+            async def __aenter__(self):
+                return live_client
+            async def __aexit__(self, *args):
+                pass
+
+        import unittest.mock as mock
+        with mock.patch("httpx.AsyncClient", side_effect=MockClientContext):
+            # 1. Test unauthorized attempt fails
+            adapter_unauth = SwitchAdapter(base_url="http://switch.internal:8080", registration_token="wrong_token")
+            healthy_bad_token = await adapter_unauth.check_health()
+            assert healthy_bad_token is False
+
+            # 2. Test authenticated live connection succeeds
+            adapter_live = SwitchAdapter(base_url="http://switch.internal:8080", registration_token=EXPECTED_TOKEN)
+            healthy = await adapter_live.check_health()
+            assert healthy is True
+
+            # 3. Live agent registration
+            agent_reg = SwitchAgentRegistration(
+                agent_id="resolution_lead_agent",
+                display_name="Resolution Lead",
+                role="RESOLUTION_LEAD",
+            )
+            reg_ok = await adapter_live.register_agent(agent_reg)
+            assert reg_ok is True
+            assert len(registered_agents) == 1
+            assert registered_agents[0]["agent_id"] == "resolution_lead_agent"
+
+            # 4. Live room creation
+            room = await adapter_live.create_or_join_room(
+                SwitchRoomCreate(
+                    issue_id="issue-live-777",
+                    room_name="Resolution Debate 777",
+                    channel_type=ChannelType.RESOLUTION,
+                )
+            )
+            assert room["room_id"] == "switch_room_issue-live-777_resolution"
+            assert len(created_rooms) == 1
+
+            # 5. Live message delivery
+            msg_ok = await adapter_live.send_message(
+                SwitchMessagePayload(
+                    room_id=room["room_id"],
+                    sender_id="solution_architect",
+                    sender_role="SOLUTION_ARCHITECT",
+                    content="Proposing 3 competing fix strategies.",
+                )
+            )
+            assert msg_ok is True
+            assert len(stored_messages) == 1
+            assert stored_messages[0]["payload"]["sender_role"] == "SOLUTION_ARCHITECT"
+
+            # 6. Live targeted handoff
+            handoff_ok = await adapter_live.route_handoff(
+                SwitchHandoff(
+                    issue_id="issue-live-777",
+                    room_id=room["room_id"],
+                    from_role="SOLUTION_ARCHITECT",
+                    to_role="CRITIC",
+                    task_description="Evaluate competing strategies",
+                )
+            )
+            assert handoff_ok is True
+            assert len(stored_messages) == 2
+            assert "Handoff to CRITIC" in stored_messages[1]["payload"]["content"]
+

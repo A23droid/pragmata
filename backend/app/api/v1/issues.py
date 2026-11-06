@@ -1,3 +1,4 @@
+import logging
 import secrets
 import uuid
 from typing import List, Optional
@@ -7,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.app.api.v1.projects import get_or_create_default_project
+from backend.app.core.auth import DeveloperUser, require_developer_auth
 from backend.app.db.session import get_db
-from backend.app.models.entities import AuditEvent, ConversationReference, Issue, Project
+from backend.app.models.entities import AuditEvent, ConversationReference, Issue, Project, Solution
 from backend.app.models.enums import ChannelType, IssueStatus
 from backend.app.schemas.audit import AuditEventResponse
 from backend.app.schemas.issue import (
@@ -18,9 +20,17 @@ from backend.app.schemas.issue import (
     IssueTransitionRequest,
     IssueTriageRequest,
 )
+from backend.app.schemas.resolution import (
+    FixApprovalRequest,
+    FixApprovalResponse,
+    SolutionResponse,
+)
 from backend.app.schemas.switch import SwitchRoomCreate
+from backend.app.services.agents.resolution_coordinator import resolution_coordinator
 from backend.app.services.switch_adapter import switch_adapter
 from backend.app.services.workflow_engine import WorkflowEngine
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/issues", tags=["Issues"])
 
@@ -168,6 +178,7 @@ async def get_issue(issue_id: str, db: AsyncSession = Depends(get_db)):
             selectinload(Issue.approvals),
             selectinload(Issue.audit_events),
             selectinload(Issue.conversations),
+            selectinload(Issue.solutions),
         )
     )
     result = await db.execute(stmt)
@@ -184,17 +195,20 @@ async def get_issue(issue_id: str, db: AsyncSession = Depends(get_db)):
 async def triage_issue(
     issue_id: str,
     payload: IssueTriageRequest,
+    developer: DeveloperUser = Depends(require_developer_auth),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Developer triage gate.
-    Authenticated developer explicitly accepts, rejects, requests info, or defers the issue.
+    Requires server-side authenticated developer. Explicitly accepts, rejects, requests info, or defers the issue.
+    Actor is derived securely from authenticated developer identity.
     """
+    actor_identity = developer.id or payload.actor or "developer"
     return await WorkflowEngine.triage_issue(
         db=db,
         issue_id=issue_id,
         decision=payload.decision,
-        actor=payload.actor,
+        actor=actor_identity,
         notes=payload.notes,
     )
 
@@ -258,3 +272,89 @@ async def get_issue_rooms(issue_id: str, db: AsyncSession = Depends(get_db)):
         }
         for r in refs
     ]
+
+
+@router.post("/{issue_id}/resolution/start")
+async def start_issue_resolution(
+    issue_id: str,
+    debate_round: int = Query(1, ge=1, le=2, description="Debate round number"),
+    developer: DeveloperUser = Depends(require_developer_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Initiate the PRAGMATA Resolution Hierarchy under Resolution Lead.
+    Enforces activation gate: requires authenticated developer acceptance before activation.
+    Runs Root Cause Analyst, Solution Architect (2-3 strategies), Critic, Scope Guardian, and Evaluator.
+    Persists competing solutions, critiques, evaluations, and Scope Guardian verdicts in PostgreSQL.
+    """
+    logger.info(f"Resolution start triggered for {issue_id} by authenticated developer {developer.id}")
+    return await resolution_coordinator.run_resolution_workflow(
+        db=db,
+        issue_id=issue_id,
+        debate_round=debate_round,
+    )
+
+
+@router.get("/{issue_id}/solutions", response_model=List[SolutionResponse])
+async def list_issue_solutions(
+    issue_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retrieve all competing fix strategies and their supporting evidence, critiques,
+    rubric rankings, and Scope Guardian audits for developer inspection.
+    """
+    stmt = (
+        select(Solution)
+        .where(Solution.issue_id == issue_id)
+        .order_by(Solution.rank.asc().nullslast(), Solution.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    solutions = result.scalars().all()
+    return solutions
+
+
+@router.post("/{issue_id}/fix-approval", response_model=FixApprovalResponse)
+async def fix_approval_gate(
+    issue_id: str,
+    payload: FixApprovalRequest,
+    developer: DeveloperUser = Depends(require_developer_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Developer fix approval gate.
+    Requires server-side authenticated developer.
+    Developer can select an agent-proposed strategy (FIX_APPROVED),
+    supply a custom strategy (CUSTOM_STRATEGY_APPROVED), request additional bounded debate,
+    reject, or defer.
+    Persists the official Approval entity in PostgreSQL.
+    Implementation agents cannot begin before this approval is recorded.
+    """
+    approval = await WorkflowEngine.approve_fix_strategy(
+        db=db,
+        issue_id=issue_id,
+        decision=payload.decision,
+        actor=developer.id,
+        solution_id=payload.solution_id,
+        custom_strategy=payload.custom_strategy,
+        notes=payload.notes,
+    )
+
+    # Fetch updated issue status
+    issue_stmt = select(Issue).where(Issue.id == issue_id)
+    issue_res = await db.execute(issue_stmt)
+    issue = issue_res.scalar_one()
+
+    return FixApprovalResponse(
+        issue_id=issue_id,
+        status=issue.status,
+        approval_id=approval.id,
+        decision=approval.decision,
+        target_type=approval.target_type,
+        solution_id=approval.solution_id,
+        custom_strategy=approval.custom_strategy,
+        actor=approval.actor,
+        notes=approval.notes,
+        created_at=approval.created_at,
+    )
+

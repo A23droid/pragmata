@@ -147,7 +147,25 @@ class GroqProvider(LLMProvider):
             elif ann == bool:
                 stub_data[name] = True
             elif origin == list or ann == list:
-                stub_data[name] = []
+                item_cls = args[0] if args else None
+                min_len = 0
+                for meta in getattr(field, "metadata", []):
+                    if hasattr(meta, "min_length") and meta.min_length:
+                        min_len = meta.min_length
+
+                count = max(min_len, 2 if (item_cls and isinstance(item_cls, type) and issubclass(item_cls, BaseModel)) else (1 if min_len > 0 else 0))
+                if count > 0 and item_cls:
+                    items = []
+                    for idx in range(count):
+                        if isinstance(item_cls, type) and issubclass(item_cls, BaseModel):
+                            items.append(self._build_stub_for_schema(item_cls))
+                        elif item_cls == str:
+                            items.append(f"sample_{name}_{idx}")
+                        else:
+                            items.append(None)
+                    stub_data[name] = items
+                else:
+                    stub_data[name] = []
             elif origin == dict or ann == dict:
                 stub_data[name] = {}
             else:
