@@ -86,6 +86,20 @@ Frontend dashboard: [http://localhost:3000](http://localhost:3000)
 
 ---
 
+## Hackathon Demo Walkthrough
+
+We provide a self-contained Node.js & TypeScript target repository in `demo/sample-node-cart` with an intentional boundary discount defect (`100 !== 80`).
+
+To run the automated end-to-end demo test:
+```bash
+cd backend
+pytest tests/test_e2e_hackathon_demo.py -v
+```
+
+For the complete interactive dashboard walkthrough script, see [demo/DEMO_SCRIPT.md](demo/DEMO_SCRIPT.md).
+
+---
+
 ## Invariants & Design Principles
 
 1. **Human Authority:** AI agents investigate, reproduce, and debate. Consequential decisions (issue acceptance, fix selection, PR merging) require authenticated developer approval.
