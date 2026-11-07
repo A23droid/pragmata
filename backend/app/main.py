@@ -12,6 +12,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from backend.app.api.demo import router as demo_router
 from backend.app.api.gateway import router as gateway_router
 from backend.app.api.v1.health import router as health_router
 from backend.app.api.v1.implementation import router as implementation_router
@@ -99,3 +100,4 @@ app.include_router(issues_router, prefix="/api/v1")
 app.include_router(investigations_router, prefix="/api/v1")
 app.include_router(implementation_router, prefix="/api/v1")
 app.include_router(switch_router, prefix="/api/v1")
+app.include_router(demo_router, prefix="/api/v1")

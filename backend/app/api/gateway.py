@@ -310,7 +310,8 @@ async def get_room(room_id: str):
 
 @router.get("/rooms/{room_id}/messages")
 async def get_room_messages(room_id: str):
-    return []
+    room = _STORED_ROOMS.get(room_id, {})
+    return room.get("_messages", [])
 
 
 @router.post("/rooms/{room_id}/messages", status_code=201)
