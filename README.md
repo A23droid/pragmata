@@ -108,7 +108,7 @@ Dashboard: http://localhost:3000
 
 ## Demo Mode (Hackathon)
 
-`branch-2` contains a self-contained hardcoded demo flow requiring no database or Docker.
+`branch-2` contains a self-contained demo flow requiring no database or Docker.
 
 ```bash
 git checkout branch-2
@@ -143,7 +143,7 @@ pragmata/
 ├── backend/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── demo.py        # Hardcoded demo flow (branch-2)
+│   │   │   ├── demo.py        # Demo workflow engine (branch-2)
 │   │   │   ├── gateway.py     # Switch Console gateway protocol server
 │   │   │   └── ...
 │   │   └── main.py
