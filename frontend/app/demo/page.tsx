@@ -88,7 +88,7 @@ export default function DemoPage() {
   const [loading, setLoading] = useState(false);
   const [speed, setSpeed] = useState<"realistic" | "fast">("realistic");
   const [slackUrl, setSlackUrl] = useState("");
-  const [showSlackConfig, setShowSlackConfig] = useState(false);
+  const [showSlackConfig, setShowSlackConfig] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 

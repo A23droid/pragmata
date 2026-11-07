@@ -420,6 +420,14 @@ export default function DashboardPage() {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
 
+          <a
+            href="/demo"
+            className="flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all border border-purple-400/30"
+          >
+            <span>🎬</span>
+            <span>Demo Mode (Switch & Slack)</span>
+          </a>
+
           <button
             onClick={() => setShowNewModal(true)}
             className="flex items-center space-x-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all"
