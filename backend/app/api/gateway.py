@@ -327,7 +327,66 @@ async def post_room_message(room_id: str, msg: Dict[str, Any]):
 
 @router.get("/chats")
 async def list_chats():
-    return []
+    chats = []
+    for r_id, r in _STORED_ROOMS.items():
+        messages = r.get("_messages", [])
+        last_msg = messages[-1]["content"][:60] if messages else None
+        chats.append({
+            "id": r_id,
+            "roomId": r_id,
+            "name": r.get("name", r_id),
+            "agentIds": r.get("agent_ids", []),
+            "lastMessage": last_msg,
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        })
+    return {"chats": chats}
+
+
+@router.get("/chats/{room_id}/messages")
+async def get_chat_messages(room_id: str):
+    room = _STORED_ROOMS.get(room_id, {})
+    raw_msgs = room.get("_messages", [])
+    formatted = []
+    for i, m in enumerate(raw_msgs):
+        sender_name = m.get("sender", "Agent")
+        formatted.append({
+            "messageId": m.get("id", f"msg_{i}"),
+            "seq": i + 1,
+            "roomId": room_id,
+            "sentAt": m.get("created_at", datetime.now(timezone.utc).isoformat()),
+            "sender": {
+                "clientId": sender_name.lower().replace(" ", "-"),
+                "name": sender_name,
+                "kind": "user" if "Developer" in sender_name else "agent",
+                "agentId": sender_name.lower().replace(" ", "-") if "Developer" not in sender_name else None,
+                "userId": "usr_dev_pragmata" if "Developer" in sender_name else None,
+            },
+            "source": "gateway",
+            "body": m.get("content", ""),
+            "format": "markdown",
+            "threadRootId": None,
+            "attachments": [],
+            "clientTxn": None,
+        })
+    return {
+        "messages": formatted,
+        "headSeq": len(formatted),
+        "hasMore": False,
+    }
+
+
+@router.get("/chats/{room_id}/activity")
+async def get_chat_activity(room_id: str):
+    return {"activity": [], "approvals": []}
+
+
+@router.get("/chats/{room_id}/members")
+async def get_chat_members(room_id: str):
+    return {
+        "members": [
+            {"userId": "usr_dev_pragmata", "name": "Pragmata Developer", "isOwner": True}
+        ]
+    }
 
 
 @router.get("/agents")
