@@ -1,9 +1,18 @@
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path so 'import backend' works from any folder or Render
+_repo_root = str(Path(__file__).resolve().parent.parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 from contextlib import asynccontextmanager
 import logging
 from typing import AsyncGenerator
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from backend.app.api.gateway import router as gateway_router
 from backend.app.api.v1.health import router as health_router
 from backend.app.api.v1.implementation import router as implementation_router
 from backend.app.api.v1.investigations import router as investigations_router
@@ -71,8 +80,20 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 
 # Routers
+@app.get("/")
+async def root():
+    return {
+        "name": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "status": "operational",
+        "switch": "active",
+    }
+
+
 app.include_router(health_router, tags=["Health"])
 app.include_router(health_router, prefix="/api/v1", tags=["Health"])
+app.include_router(gateway_router, prefix="/gateway", tags=["Switch Gateway"])
+app.include_router(gateway_router, tags=["Switch Gateway (Direct)"])
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(issues_router, prefix="/api/v1")
 app.include_router(investigations_router, prefix="/api/v1")

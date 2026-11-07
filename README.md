@@ -58,8 +58,8 @@ docker compose ps
 ```bash
 cd backend
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 
 # Run database migrations
 alembic upgrade head
@@ -68,7 +68,7 @@ alembic upgrade head
 pytest tests
 
 # Start backend server
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Backend health check: [http://localhost:8000/health](http://localhost:8000/health)
